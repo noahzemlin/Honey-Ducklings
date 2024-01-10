@@ -1,13 +1,11 @@
-package examplefuncsplayer;
+package honeyducklings;
 
 import battlecode.common.*;
 
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.Random;
-import java.util.Set;
+
+import static java.lang.Math.abs;
 
 /**
  * RobotPlayer is the class that describes your main robot strategy.
@@ -29,7 +27,7 @@ public strictfp class RobotPlayer {
      * import at the top of this file. Here, we *seed* the RNG with a constant number (6147); this makes sure
      * we get the same sequence of numbers every time this code is run. This is very useful for debugging!
      */
-    static final Random rng = new Random(6147);
+    static final Random rng = new Random(2718);
 
     /** Array containing all the possible movement directions. */
     static final Direction[] directions = {
@@ -42,6 +40,8 @@ public strictfp class RobotPlayer {
         Direction.WEST,
         Direction.NORTHWEST,
     };
+
+    static Team enemyTeam;
 
     /**
      * run() is the method that is called when a robot is instantiated in the Battlecode world.
@@ -59,6 +59,7 @@ public strictfp class RobotPlayer {
 
         // You can also use indicators to save debug notes in replays.
         rc.setIndicatorString("Hello world!");
+        enemyTeam = rc.getTeam().opponent();
 
         while (true) {
             // This code runs during the entire lifespan of the robot, which is why it is in an infinite
@@ -78,22 +79,76 @@ public strictfp class RobotPlayer {
                     if (rc.canSpawn(randomLoc)) rc.spawn(randomLoc);
                 }
                 else{
-                    if (rc.canPickupFlag(rc.getLocation())){
+                    if (rc.canPickupFlag(rc.getLocation()) && !rc.senseNearbyFlags(0)[0].getTeam().equals(rc.getTeam())){
                         rc.pickupFlag(rc.getLocation());
+                        rc.writeSharedArray(0, flagLocToArrayStorage(rc.getLocation()));
+                        rc.writeSharedArray(1, rc.getRoundNum());
                         rc.setIndicatorString("Holding a flag!");
+                        System.out.println("Picked up flag!");
                     }
+
+                    MapLocation[] spawnLocs = rc.getAllySpawnLocations();
+                    MapLocation[] flagSpawnLocs = rc.senseBroadcastFlagLocations();
+//                    int sumX = 0;
+//                    int sumY = 0;
+//                    for (MapLocation mapLoc : spawnLocs) {
+//                        sumX += mapLoc.x;
+//                        sumY += mapLoc.y;
+//                    }
+                    MapLocation targetEnemyLocation;
+//                    MapLocation targetEnemyLocation = new MapLocation((int)(sumX / (double)spawnLocs.length), (int)(sumY / (double)spawnLocs.length));
+                    if (flagSpawnLocs.length > 0) {
+                        targetEnemyLocation = flagSpawnLocs[0];
+                    } else {
+                        targetEnemyLocation = new MapLocation(rc.getMapWidth() / 2, rc.getMapHeight()/2);
+                    }
+
                     // If we are holding an enemy flag, singularly focus on moving towards
                     // an ally spawn zone to capture it! We use the check roundNum >= SETUP_ROUNDS
                     // to make sure setup phase has ended.
                     if (rc.hasFlag() && rc.getRoundNum() >= GameConstants.SETUP_ROUNDS){
-                        MapLocation[] spawnLocs = rc.getAllySpawnLocations();
                         MapLocation firstLoc = spawnLocs[0];
                         Direction dir = rc.getLocation().directionTo(firstLoc);
+                        rc.writeSharedArray(0, flagLocToArrayStorage(rc.getLocation()));
+                        rc.writeSharedArray(1, rc.getRoundNum());
+                        if (firstLoc.equals(rc.getLocation().add(dir))) {
+                            System.out.println("Captured!");
+                            rc.writeSharedArray(0, 0);
+                        }
                         if (rc.canMove(dir)) rc.move(dir);
                     }
+
+                    int flagCapRoundNum = rc.readSharedArray(1);
+                    if (flagCapRoundNum > 0 && abs(flagCapRoundNum - rc.getRoundNum()) > 2) {
+                        rc.writeSharedArray(1, 0);
+                        rc.writeSharedArray(0, 0);
+                    }
+
+                    int groupLocationValue = rc.readSharedArray(0);
+
+                    RobotInfo[] enemyRobots = rc.senseNearbyRobots(2, enemyTeam);
+
+                    if (enemyRobots.length > 0 && rc.canAttack(enemyRobots[0].getLocation())) {
+                        rc.attack(enemyRobots[0].getLocation());
+                    }
+
                     // Move and attack randomly if no objective.
-                    Direction dir = directions[rng.nextInt(directions.length)];
-                    MapLocation nextLoc = rc.getLocation().add(dir);
+                    Direction dir;
+                    MapLocation nextLoc;
+                    if (rng.nextInt(10) < 8) {
+                        dir = directions[rng.nextInt(directions.length)];
+                    } else if(groupLocationValue == 0) {
+                        dir = rc.getLocation().directionTo(targetEnemyLocation);
+                        rc.setIndicatorString("Heading to " + targetEnemyLocation);
+                        rc.setIndicatorLine(rc.getLocation(), targetEnemyLocation, 255, 0, 0);
+                    } else {
+                        dir = rc.getLocation().directionTo(flagArrayStorageToLoc(groupLocationValue));
+                        rc.setIndicatorString("Heading to " + flagArrayStorageToLoc(groupLocationValue));
+                        rc.setIndicatorLine(rc.getLocation(), flagArrayStorageToLoc(groupLocationValue), 0, 255, 0);
+                    }
+
+                    nextLoc = rc.getLocation().add(dir);
+
                     if (rc.canMove(dir)){
                         rc.move(dir);
                     }
@@ -106,8 +161,6 @@ public strictfp class RobotPlayer {
                     MapLocation prevLoc = rc.getLocation().subtract(dir);
                     if (rc.canBuild(TrapType.EXPLOSIVE, prevLoc) && rng.nextInt() % 37 == 1)
                         rc.build(TrapType.EXPLOSIVE, prevLoc);
-                    // We can also move our code into different methods or classes to better organize it!
-                    updateEnemyRobots(rc);
                 }
 
             } catch (GameActionException e) {
@@ -133,22 +186,12 @@ public strictfp class RobotPlayer {
 
         // Your code should never reach here (unless it's intentional)! Self-destruction imminent...
     }
-    public static void updateEnemyRobots(RobotController rc) throws GameActionException{
-        // Sensing methods can be passed in a radius of -1 to automatically 
-        // use the largest possible value.
-        RobotInfo[] enemyRobots = rc.senseNearbyRobots(-1, rc.getTeam().opponent());
-        if (enemyRobots.length != 0){
-            rc.setIndicatorString("There are nearby enemy robots! Scary!");
-            // Save an array of locations with enemy robots in them for future use.
-            MapLocation[] enemyLocations = new MapLocation[enemyRobots.length];
-            for (int i = 0; i < enemyRobots.length; i++){
-                enemyLocations[i] = enemyRobots[i].getLocation();
-            }
-            // Let the rest of our team know how many enemy robots we see!
-            if (rc.canWriteSharedArray(0, enemyRobots.length)){
-                rc.writeSharedArray(0, enemyRobots.length);
-                int numEnemies = rc.readSharedArray(0);
-            }
-        }
+
+    public static int flagLocToArrayStorage(MapLocation location) {
+        return location.x + location.y * 100;
+    }
+
+    public static MapLocation flagArrayStorageToLoc(int value) {
+        return new MapLocation(value % 100, value / 100);
     }
 }
