@@ -14,12 +14,21 @@ public strictfp class RobotPlayer {
     private static Random random;
     private static int mapWidth;
     private static int mapHeight;
+    private static boolean willHeal;
+    private static boolean isCommander = false;
 
-    public static void setup(RobotController rc) {
+    public static void setup(RobotController rc) throws GameActionException {
+
+        if (rc.readSharedArray(0) == 0) {
+            rc.writeSharedArray(0, 1);
+            isCommander = true;
+        }
 
         random = new Random(2718);
 
         enemyTeam = rc.getTeam().opponent();
+
+        willHeal = rc.getID() % 3 == 0;
 
         mapWidth = rc.getMapWidth();
         mapHeight = rc.getMapHeight();
@@ -64,79 +73,127 @@ public strictfp class RobotPlayer {
             }
         }
 
-        // Run early game separate
-        if (rc.getRoundNum() < 200) {
-            runEarlyGame(rc);
-            return;
+//        // Run early game separate
+//        if (rc.getRoundNum() < 200) {
+//            runEarlyGame(rc);
+//            return;
+//        }
+
+        // Attack if we see someone
+        RobotInfo[] enemies = rc.senseNearbyRobots(-1, enemyTeam);
+        boolean triedToAttack = false;
+        if (enemies.length > 0) {
+            triedToAttack = true;
+            RobotInfo bestEnemy = enemies[0];
+            for (int i = 1; i < enemies.length; i++) {
+                if (rc.canAttack(enemies[i].getLocation()) && enemies[i].health < bestEnemy.health) {
+                    bestEnemy = enemies[i];
+                }
+            }
+
+            if (rc.canAttack(bestEnemy.getLocation())) {
+                rc.attack(bestEnemy.getLocation());
+            }
         }
 
-        // For now, just move to center to test path planning
-        // TODO: Replace with something not this
-        if (rc.isMovementReady()) {
+        // Heal if we can
+        boolean triedToHeal = false;
+        if (willHeal) {
+            RobotInfo[] allies = rc.senseNearbyRobots(-1, rc.getTeam());
+            for (RobotInfo ally : allies) {
+                if (ally.health < 500 && rc.canHeal(ally.getLocation())) {
+                    triedToHeal = true;
+                    rc.heal(ally.getLocation());
+                    break;
+                }
+            }
+        }
+
+        // Pick up flag if we can
+        FlagInfo[] enemyFlags = rc.senseNearbyFlags(-1, enemyTeam);
+        for (FlagInfo enemyFlag: enemyFlags) {
+            if (rc.canPickupFlag(enemyFlag.getLocation())) {
+                rc.pickupFlag(enemyFlag.getLocation());
+                break;
+            }
+        }
+
+        // For now, just move to enemy flag
+        if (!triedToAttack && !triedToHeal && rc.isMovementReady()) {
             // Check our surroundings and add to our map estimate
             analyzeSurroundings(rc);
 
             MapLocation ourLocation = rc.getLocation();
-            MapLocation targetLocation = new MapLocation(10, 15);
-            Direction toCenter = PathPlanner.planRoute(map, ourLocation, targetLocation);
+            MapLocation targetLocation = ourLocation.add(Direction.allDirections()[random.nextInt(9)]);
 
-            if (toCenter == null) {
+//            MapLocation[] flagLocations = rc.senseBroadcastFlagLocations();
+//            if (flagLocations.length > 0) {
+//                targetLocation = flagLocations[0];
+//            }
+
+            if (isCommander) {
+                MapLocation[] flagLocations = rc.senseBroadcastFlagLocations();
+                if (flagLocations.length > 0) {
+                    targetLocation = flagLocations[0];
+                }
+
+                if (rc.onTheMap(targetLocation)) {
+                    MapLocation commandedLocation = ourLocation;
+                    rc.writeSharedArray(0, commandedLocation.x + commandedLocation.y * 100 + 1);
+                }
+            }
+
+            int command = rc.readSharedArray(0) - 1;
+            if (!isCommander && command > 0) {
+                targetLocation = new MapLocation(command % 100, command / 100);
+            }
+
+            FlagInfo[] visibleFlags = rc.senseNearbyFlags(-1, enemyTeam);
+            if (visibleFlags.length > 0 && !visibleFlags[0].isPickedUp()) {
+                targetLocation = visibleFlags[0].getLocation();
+            }
+
+            if (rc.hasFlag()) {
+                targetLocation = allySpawnLocations[0];
+            }
+
+            if (!isCommander && ourLocation.isWithinDistanceSquared(targetLocation, 64)) {
+                targetLocation = ourLocation.add(Direction.allDirections()[random.nextInt(9)]);
+            }
+
+            Direction toTarget = PathPlanner.planRoute(map, ourLocation, targetLocation);
+
+            if (toTarget == null) {
                 rc.setIndicatorString("Failed to path plan!");
-                toCenter = ourLocation.directionTo(targetLocation);
+                toTarget = ourLocation.directionTo(targetLocation);
             }
 
             rc.setIndicatorLine(ourLocation, targetLocation, 255, 0, 0);
-            rc.setIndicatorString("Moving " + toCenter + " to center.");
+            rc.setIndicatorString("Moving " + toTarget + " to target.");
 
-            if (toCenter == Direction.CENTER) {
+            if (toTarget == Direction.CENTER) {
                 return;
             }
 
-            if (rc.canMove(toCenter)) {
-                rc.move(toCenter);
+//            if (isCommander) {
+//                return;
+//            }
+
+            if (rc.canMove(toTarget)) {
+                rc.move(toTarget);
+
+                if (rc.canBuild(TrapType.STUN, ourLocation))
+                    rc.build(TrapType.STUN, ourLocation);
             } else {
-                System.out.println("Tried to move " + toCenter);
+                System.out.println("Tried to move " + toTarget);
             }
         }
     }
 
     public static void runEarlyGame(RobotController rc) throws GameActionException {
         // See if we can grab an ally flag and start moving it far away
-        if (rc.hasFlag()) {
-            if (!rc.isMovementReady()) {
-                return;
-            }
-
-            if (rc.getRoundNum() > 190) {
-                for (Direction direction : Direction.allDirections()) {
-                    MapLocation desiredDropLocation = rc.getLocation().add(direction);
-                    if (rc.canDropFlag(desiredDropLocation)) {
-                        rc.dropFlag(desiredDropLocation);
-                    }
-                }
-            }
-
-            Direction toSafeCorner = PathPlanner.planRoute(map, rc.getLocation(), safeCorner);
-            if (toSafeCorner == null) {
-                rc.setIndicatorString("Failed to path plan!");
-                toSafeCorner = rc.getLocation().directionTo(safeCorner);
-            }
-
-            if (rc.canMove(toSafeCorner)) {
-                rc.move(toSafeCorner);
-                rc.setIndicatorString("Moving flag to " + safeCorner);
-            }
-
-            return;
-        } else if (rc.getRoundNum() < 10) {
-            FlagInfo[] nearbyFlags = rc.senseNearbyFlags(1, rc.getTeam());
-            for (FlagInfo flag : nearbyFlags) {
-                if (rc.canPickupFlag(flag.getLocation())) {
-                    rc.pickupFlag(flag.getLocation());
-                    return;
-                }
-            }
-        }
+        // NOPE, this is illegal unless we want to figure out how to keep the flags
+        // 6 tiles apart lol
 
         Direction randomDirection = Direction.allDirections()[random.nextInt(9)];
         if (rc.canMove(randomDirection)) {
@@ -145,7 +202,12 @@ public strictfp class RobotPlayer {
     }
 
     public static void run(RobotController rc) {
-        setup(rc);
+        try {
+            setup(rc);
+        } catch (GameActionException e) {
+            System.out.println("Failed on setup!");
+            e.printStackTrace();
+        }
 
         while (true) try {
             runStep(rc);
@@ -161,20 +223,16 @@ public strictfp class RobotPlayer {
     }
 
     public static PathPlanner.MapType mapInfoToMapType(RobotController rc, MapInfo mapInfo) {
-        if (mapInfo.isWall()) {
-            return PathPlanner.MapType.WALL;
-        }
-
-        if (mapInfo.isWater()) {
-            return PathPlanner.MapType.WATER;
-        }
-
         if (!mapInfo.isPassable()) {
             return PathPlanner.MapType.NOT_PASSABLE;
         }
 
-        if (rc.canSenseRobotAtLocation(mapInfo.getMapLocation())) {
-            return PathPlanner.MapType.NOT_PASSABLE;
+        try {
+            if (rc.isLocationOccupied(mapInfo.getMapLocation())) {
+                return PathPlanner.MapType.NOT_PASSABLE;
+            }
+        } catch (GameActionException e) {
+            return PathPlanner.MapType.EMPTY;
         }
 
         return PathPlanner.MapType.EMPTY;

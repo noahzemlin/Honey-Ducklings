@@ -1,7 +1,9 @@
 package honeyducklings;
 
+import battlecode.common.Clock;
 import battlecode.common.Direction;
 import battlecode.common.MapLocation;
+import battlecode.common.RobotController;
 
 import java.util.ArrayList;
 import java.util.PriorityQueue;
@@ -46,10 +48,32 @@ public class PathPlanner {
     }
 
     public static Direction planRoute(MapType[][] map, MapLocation from, MapLocation to) {
-        if (from == to) {
-            System.out.println("Tried to path no where lol");
+        int width = map.length;
+        int height = map[0].length;
+
+        if (from.equals(to) || to.x < 0 || to.y < 0 || to.x >= width || to.y >= height) {
+//            System.out.println("Tried to path no where lol");
             return Direction.CENTER;
         }
+
+        MapLocation lastBacktrackLocation = to;
+
+        int backTrackBeforeCost = Clock.getBytecodeNum();
+
+        while (true) {
+            Direction backtrack = lastBacktrackLocation.directionTo(from);
+            MapLocation backtrackLocation = lastBacktrackLocation.add(backtrack);
+
+            if (backtrackLocation.equals(from) || map[backtrackLocation.x][backtrackLocation.y] != MapType.EMPTY) {
+                break;
+            } else {
+                lastBacktrackLocation = backtrackLocation;
+            }
+        }
+
+        int backTrackCost = Clock.getBytecodeNum() - backTrackBeforeCost;
+
+        to = lastBacktrackLocation;
 
         if (map[to.x][to.y] != MapType.EMPTY) {
             return Direction.CENTER;
@@ -59,8 +83,6 @@ public class PathPlanner {
             return from.directionTo(to);
         }
 
-        int width = map.length;
-        int height = map[0].length;
         ANode[][] nodeMap = new ANode[width][height];
 
         for (int i=0; i < width; i++) {
@@ -76,7 +98,14 @@ public class PathPlanner {
         int openNodes = 1;
         int exploredNodes = 0;
         while (openNodes > 0) {
+
+            // Dont burn all our bytecodes :(
+            if (Clock.getBytecodesLeft() < 1000) {
+                return from.directionTo(to);
+            }
+
             exploredNodes++;
+
             MapLocation current = null;
             double lowestF = 1000000;
             for (int x = 0; x < width; x++) {
@@ -115,7 +144,7 @@ public class PathPlanner {
                     }
                 }
 
-                System.out.println("Completed search! Explored " + exploredNodes + " nodes. Moving " + from.directionTo(current));
+//                System.out.println("Searched! Nodes: " + exploredNodes + ", Backtrack: " + backTrackCost + ", Search: " + (Clock.getBytecodeNum() - backTrackBeforeCost - backTrackCost));
 
                 if (map[current.x][current.y] != MapType.EMPTY && !hasPrinted) {
                     StringBuilder message = new StringBuilder();
