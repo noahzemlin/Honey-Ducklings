@@ -1,56 +1,25 @@
-# Battlecode 2024 Scaffold
+# Honey Ducklings
 
-This is the Battlecode 2024 scaffold, containing an `examplefuncsplayer`. Read https://play.battlecode.org/bc24/getting-started!
+This is the code for the Honey Ducklings team as part of MIT Battlecode 2024 https://battlecode.org/
 
-**We are using a rewritten version of the client this year, so please let teh devs know 
-if you encounter any issues or have any feedback!**
+# Strategy
 
-### Project Structure
+## Defense wins championships
+Build a strong defense around our bread. If we can't capture theirs, at least they won't capture ours.
+- Take all three flags at the start and move them the farthest we can
+- Hold all three flags such that `rc.getAllySpawnLocations()` returns nothing
+- Build a moat around where the three flags are and set up defenders
 
-- `README.md`
-    This file.
-- `build.gradle`
-    The Gradle build file used to build and run players.
-- `src/`
-    Player source code.
-- `test/`
-    Player test code.
-- `client/`
-    Contains the client. The proper executable can be found in this folder (don't move this!)
-- `build/`
-    Contains compiled player code and other artifacts of the build process. Can be safely ignored.
-- `matches/`
-    The output folder for match files.
-- `maps/`
-    The default folder for custom maps.
-- `gradlew`, `gradlew.bat`
-    The Unix (OS X/Linux) and Windows versions, respectively, of the Gradle wrapper. These are nifty scripts that you can execute in a terminal to run the Gradle build tasks of this project. If you aren't planning to do command line development, these can be safely ignored.
-- `gradle/`
-    Contains files used by the Gradle wrapper scripts. Can be safely ignored.
+## Offense is the best defense
+The first two tiebreakers (except flags) are sum of all unit levels and amount of crumbs. We can maximize both of these by attacking the enemy in their zone.
+- Align an offense just on the enemy's dam line
+- Attack enemies as they come near. Each kill grants us 50 crumbs
+- Place traps between dam spots to bait enemies into approaching
+  - Have one or two builders building these for max builder points
+- Place healers behind attackers
 
-### How to get started
+# Versions
 
-You are free to directly edit `examplefuncsplayer`.
-However, we recommend you make a new bot by copying `examplefuncsplayer` to a new package under the `src` folder.
+## Version 1
 
-### Useful Commands
-
-- `./gradlew build`
-    Compiles your player
-- `./gradlew run`
-    Runs a game with the settings in gradle.properties
-- `./gradlew update`
-    Update configurations for the latest version -- run this often
-- `./gradlew zipForSubmit`
-    Create a submittable zip file
-- `./gradlew tasks`
-    See what else you can do!
-
-
-### Configuration 
-
-Look at `gradle.properties` for project-wide configuration.
-
-If you are having any problems with the default client, please report to teh devs and
-feel free to set the `compatibilityClient` configuration to `true` to download a different
-version of the client.
+Just the starter bot with some taped-on features such as preference for moving towards enemy flags, protecting the flag carrier, and attacking enemies in range.
