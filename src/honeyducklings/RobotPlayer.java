@@ -12,6 +12,8 @@ public strictfp class RobotPlayer {
     private static Team enemyTeam;
     private static MapLocation safeCorner;
     private static Random random;
+    private static int mapWidth;
+    private static int mapHeight;
 
     public static void setup(RobotController rc) {
 
@@ -19,9 +21,12 @@ public strictfp class RobotPlayer {
 
         enemyTeam = rc.getTeam().opponent();
 
-        map = new PathPlanner.MapType[rc.getMapWidth()][rc.getMapHeight()];
-        for (int x = 0; x < rc.getMapWidth(); x++) {
-            for (int y = 0; y < rc.getMapHeight(); y++) {
+        mapWidth = rc.getMapWidth();
+        mapHeight = rc.getMapHeight();
+
+        map = new PathPlanner.MapType[mapWidth][mapHeight];
+        for (int x = 0; x < mapWidth; x++) {
+            for (int y = 0; y < mapHeight; y++) {
                 map[x][y] = PathPlanner.MapType.EMPTY;
             }
         }
@@ -40,8 +45,8 @@ public strictfp class RobotPlayer {
         int averageSpawnLocationY = (int) (sumSpawnLocationY / (double) (allySpawnLocations.length));
 
         safeCorner = new MapLocation(
-                (averageSpawnLocationX / (rc.getMapWidth() / 2)) * (rc.getMapWidth() - 1),
-                (averageSpawnLocationY / (rc.getMapHeight() / 2)) * (rc.getMapHeight() - 1)
+                (averageSpawnLocationX / (mapWidth / 2)) * (mapWidth - 1),
+                (averageSpawnLocationY / (mapHeight / 2)) * (mapHeight - 1)
         );
     }
 
@@ -59,29 +64,71 @@ public strictfp class RobotPlayer {
             }
         }
 
-        // Check our surroundings and add to our map estimate
-        analyzeSurroundings(rc);
-
         // Run early game separate
         if (rc.getRoundNum() < 200) {
             runEarlyGame(rc);
             return;
         }
 
-        // TODO: What do now??
+        // For now, just move to center to test path planning
+        // TODO: Replace with something not this
+        if (rc.isMovementReady()) {
+            // Check our surroundings and add to our map estimate
+            analyzeSurroundings(rc);
+
+            MapLocation ourLocation = rc.getLocation();
+            MapLocation targetLocation = new MapLocation(10, 15);
+            Direction toCenter = PathPlanner.planRoute(map, ourLocation, targetLocation);
+
+            if (toCenter == null) {
+                rc.setIndicatorString("Failed to path plan!");
+                toCenter = ourLocation.directionTo(targetLocation);
+            }
+
+            rc.setIndicatorLine(ourLocation, targetLocation, 255, 0, 0);
+            rc.setIndicatorString("Moving " + toCenter + " to center.");
+
+            if (toCenter == Direction.CENTER) {
+                return;
+            }
+
+            if (rc.canMove(toCenter)) {
+                rc.move(toCenter);
+            } else {
+                System.out.println("Tried to move " + toCenter);
+            }
+        }
     }
 
     public static void runEarlyGame(RobotController rc) throws GameActionException {
         // See if we can grab an ally flag and start moving it far away
         if (rc.hasFlag()) {
+            if (!rc.isMovementReady()) {
+                return;
+            }
+
+            if (rc.getRoundNum() > 190) {
+                for (Direction direction : Direction.allDirections()) {
+                    MapLocation desiredDropLocation = rc.getLocation().add(direction);
+                    if (rc.canDropFlag(desiredDropLocation)) {
+                        rc.dropFlag(desiredDropLocation);
+                    }
+                }
+            }
+
             Direction toSafeCorner = PathPlanner.planRoute(map, rc.getLocation(), safeCorner);
+            if (toSafeCorner == null) {
+                rc.setIndicatorString("Failed to path plan!");
+                toSafeCorner = rc.getLocation().directionTo(safeCorner);
+            }
+
             if (rc.canMove(toSafeCorner)) {
                 rc.move(toSafeCorner);
+                rc.setIndicatorString("Moving flag to " + safeCorner);
             }
-            rc.setIndicatorString("Moving flag to " + safeCorner);
-            rc.setIndicatorLine(rc.getLocation(), safeCorner, 0, 255, 0);
+
             return;
-        } else {
+        } else if (rc.getRoundNum() < 10) {
             FlagInfo[] nearbyFlags = rc.senseNearbyFlags(1, rc.getTeam());
             for (FlagInfo flag : nearbyFlags) {
                 if (rc.canPickupFlag(flag.getLocation())) {
@@ -113,7 +160,7 @@ public strictfp class RobotPlayer {
         }
     }
 
-    public static PathPlanner.MapType mapInfoToMapType(MapInfo mapInfo) {
+    public static PathPlanner.MapType mapInfoToMapType(RobotController rc, MapInfo mapInfo) {
         if (mapInfo.isWall()) {
             return PathPlanner.MapType.WALL;
         }
@@ -126,14 +173,18 @@ public strictfp class RobotPlayer {
             return PathPlanner.MapType.NOT_PASSABLE;
         }
 
+        if (rc.canSenseRobotAtLocation(mapInfo.getMapLocation())) {
+            return PathPlanner.MapType.NOT_PASSABLE;
+        }
+
         return PathPlanner.MapType.EMPTY;
     }
 
     public static void analyzeSurroundings(RobotController rc) throws GameActionException {
-        MapInfo[] nearbyMap = rc.senseNearbyMapInfos(-1);
+        MapInfo[] nearbyMap = rc.senseNearbyMapInfos(9);
 
         for (MapInfo tile : nearbyMap) {
-            map[tile.getMapLocation().x][tile.getMapLocation().y] = mapInfoToMapType(tile);
+            map[tile.getMapLocation().x][tile.getMapLocation().y] = mapInfoToMapType(rc, tile);
         }
     }
 }
