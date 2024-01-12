@@ -1,4 +1,4 @@
-package honeyducklings;
+package honeyducklings_v3;
 
 import battlecode.common.*;
 
@@ -40,7 +40,6 @@ public strictfp class RobotPlayer {
 
     public static MapLocation knownEnemyFlagLocation = null;
     public static int flagValid = 0;
-    public static boolean resumePlanningLater = false;
 
 
     public static void setup(RobotController rc) throws GameActionException {
@@ -165,7 +164,7 @@ public strictfp class RobotPlayer {
 
         // For now, just move to enemy flag
         MapLocation ourLocation = rc.getLocation();
-        if ((rc.hasFlag() || !triedToAttack) && rc.isMovementReady()) {
+        if (!triedToAttack && rc.isMovementReady()) {
             // Check our surroundings and add to our map estimate
             analyzeSurroundings(rc);
 
@@ -222,13 +221,7 @@ public strictfp class RobotPlayer {
             }
 
             rc.setIndicatorLine(ourLocation, targetLocation, 255, isCommander ? 255 : 0, 0);
-            Direction toTarget = PathPlanner.planRoute(resumePlanningLater, map, ourLocation, targetLocation);
-
-            if (toTarget == null) {
-                resumePlanningLater = true;
-            } else {
-                resumePlanningLater = false;
-            }
+            Direction toTarget = PathPlanner.planRoute(map, ourLocation, targetLocation);
 
             if (toTarget == null) {
                 rc.setIndicatorString("Failed to path plan!");
