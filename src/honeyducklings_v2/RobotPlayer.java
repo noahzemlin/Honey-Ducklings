@@ -178,7 +178,7 @@ public strictfp class RobotPlayer {
                 return;
             }
 
-            rc.setIndicatorLine(ourLocation, targetLocation, 255, 0, 0);
+//            rc.setIndicatorLine(ourLocation, targetLocation, 255, 0, 0);
             rc.setIndicatorString("Moving " + toTarget + " to target.");
 
             if (rc.canMove(toTarget)) {

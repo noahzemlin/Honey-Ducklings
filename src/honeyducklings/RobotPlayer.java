@@ -6,6 +6,8 @@ import java.util.Arrays;
 import java.util.Map;
 import java.util.Random;
 
+import static java.lang.Math.min;
+
 public strictfp class RobotPlayer {
 
     private static PathPlanner.MapType[][] map;
@@ -23,6 +25,22 @@ public strictfp class RobotPlayer {
 
     private static boolean triedToHeal = false;
     private static boolean triedToAttack = false;
+    private static int retreatingTicks = 0;
+    private static int commanderSaveOurFlagLatch = 0;
+    public static Direction[] reasonableDirections = {
+            Direction.NORTH,
+            Direction.NORTHEAST,
+            Direction.EAST,
+            Direction.SOUTHEAST,
+            Direction.SOUTH,
+            Direction.SOUTHWEST,
+            Direction.WEST,
+            Direction.NORTHWEST,
+    };
+
+    public static MapLocation knownEnemyFlagLocation = null;
+    public static int flagValid = 0;
+
 
     public static void setup(RobotController rc) throws GameActionException {
 
@@ -37,7 +55,7 @@ public strictfp class RobotPlayer {
         ourTeam = rc.getTeam();
         enemyTeam = ourTeam.opponent();
 
-        willHeal = rc.getID() % 4 == 0;
+        willHeal = rc.getID() % 3 == 0;
 
         mapWidth = rc.getMapWidth();
         mapHeight = rc.getMapHeight();
@@ -73,15 +91,21 @@ public strictfp class RobotPlayer {
     public static void runStep(RobotController rc) throws GameActionException {
         if (!rc.isSpawned()) {
             for (MapLocation spawnLocation : allySpawnLocations) {
+                if (random.nextInt(5) <= 3) {
+                    continue;
+                }
                 if (rc.canSpawn(spawnLocation)) {
                     rc.spawn(spawnLocation);
 
                     // Wipe map for performance reasons i guess
                     for (int x = 0; x < mapWidth; x++) {
                         for (int y = 0; y < mapHeight; y++) {
-                            map[x][y] = PathPlanner.MapType.EMPTY;
+                            if (map[x][y] != PathPlanner.MapType.WALL)
+                                map[x][y] = PathPlanner.MapType.EMPTY;
                         }
                     }
+
+                    attacks = 0;
                 }
             }
 
@@ -97,9 +121,50 @@ public strictfp class RobotPlayer {
 //            return;
 //        }
 
+        // Start commanding!
+        if (isCommander) {
+            MapLocation commandLocation = huddle;
+
+            int ourFlagStatus = rc.readSharedArray(2) - 1;
+
+            if (commanderSaveOurFlagLatch == 0 && ourFlagStatus >= 0) {
+                // They have our flag!!!111!!
+                commandLocation = new MapLocation(ourFlagStatus % 100, ourFlagStatus / 100);
+                commanderSaveOurFlagLatch = 40;
+            } else if (commanderSaveOurFlagLatch > 0) {
+                commanderSaveOurFlagLatch--;
+                if (commanderSaveOurFlagLatch <= 0) {
+                    rc.writeSharedArray(2, 0);
+                } else {
+                    commandLocation = new MapLocation(ourFlagStatus % 100, ourFlagStatus / 100);
+                }
+            } else {
+//                if (knownEnemyFlagLocation != null) {
+//                    commandLocation = knownEnemyFlagLocation;
+//                    flagValid--;
+//                    if (flagValid <= 0) {
+//                        knownEnemyFlagLocation = null;
+//                    }
+//                } else {
+                MapLocation[] flagLocations = rc.senseBroadcastFlagLocations();
+                int round = rc.getRoundNum();
+                if (round < 200) {
+                    round = 200;
+                }
+                int roundBasedFlagTarget = 2 - (round - 200) / 601;
+
+                if (flagLocations.length > 0) {
+                    commandLocation = flagLocations[min(roundBasedFlagTarget, flagLocations.length - 1)];
+                }
+//                }
+            }
+
+            rc.writeSharedArray(0, commandLocation.x + commandLocation.y * 100 + 1);
+        }
+
         // For now, just move to enemy flag
         MapLocation ourLocation = rc.getLocation();
-        if (!triedToHeal && rc.isMovementReady()) {
+        if (!triedToAttack && rc.isMovementReady()) {
             // Check our surroundings and add to our map estimate
             analyzeSurroundings(rc);
 
@@ -108,31 +173,54 @@ public strictfp class RobotPlayer {
             // Huddle up by default
             targetLocation = huddle;
 
-            if (isCommander) {
-                MapLocation[] flagLocations = rc.senseBroadcastFlagLocations();
-                if (flagLocations.length > 0) {
-                    targetLocation = flagLocations[0];
-                }
-            }
-
             int command = rc.readSharedArray(0) - 1;
-            if (!isCommander && command > 0) {
+            if (command > 0) {
                 targetLocation = new MapLocation(command % 100, command / 100);
             }
 
-            FlagInfo[] visibleFlags = rc.senseNearbyFlags(-1, enemyTeam);
-            if (visibleFlags.length > 0 && !visibleFlags[0].isPickedUp()) {
-                targetLocation = visibleFlags[0].getLocation();
-            }
+            FlagInfo[] visibleFlags = rc.senseNearbyFlags(-1);
+            for(FlagInfo flag : visibleFlags) {
+                if (flag.getTeam().equals(enemyTeam) && !flag.isPickedUp()) {
+                    targetLocation = visibleFlags[0].getLocation();
 
-            if (rc.hasFlag()) {
-                targetLocation = allySpawnLocations[0];
+//                    if (isCommander) {
+//                        knownEnemyFlagLocation = targetLocation;
+//                        flagValid = 200;
+//                    }
+                }
+
+                if (flag.getTeam().equals(ourTeam) && flag.isPickedUp()) {
+                    rc.writeSharedArray(2, flag.getLocation().x + flag.getLocation().y + 100 + 1);
+                }
             }
 
 //            if (!isCommander && ourLocation.isWithinDistanceSquared(targetLocation, 64)) {
 //                targetLocation = ourLocation.add(Direction.allDirections()[random.nextInt(9)]);
 //            }
 
+            // No allies! Scary! Return to huddle :(
+            if (retreatingTicks == 0) {
+                RobotInfo[] alliesNearby = rc.senseNearbyRobots(16, ourTeam);
+                if (alliesNearby.length < 4) {
+                    targetLocation = huddle;
+                    retreatingTicks = 5;
+                }
+            } else if (retreatingTicks > 0) {
+                targetLocation = huddle;
+                retreatingTicks--;
+                if (retreatingTicks == 0) {
+                    retreatingTicks = -20; //Confidence!!
+                }
+            } else {
+                retreatingTicks++;
+            }
+
+            // Always go to flag if we have one
+            if (rc.hasFlag()) {
+                targetLocation = allySpawnLocations[rc.getID() % allySpawnLocations.length];
+            }
+
+            rc.setIndicatorLine(ourLocation, targetLocation, 255, isCommander ? 255 : 0, 0);
             Direction toTarget = PathPlanner.planRoute(map, ourLocation, targetLocation);
 
             if (toTarget == null) {
@@ -141,32 +229,25 @@ public strictfp class RobotPlayer {
             }
 
             if (toTarget == Direction.CENTER) {
-                rc.setIndicatorString("No path.");
-                return;
+//                rc.setIndicatorString("No path.");
+//                return;
+                toTarget = reasonableDirections[random.nextInt(reasonableDirections.length)];
             }
 
-            rc.setIndicatorLine(ourLocation, targetLocation, 255, 0, 0);
             rc.setIndicatorString("Moving " + toTarget + " to target.");
 
             if (rc.canMove(toTarget)) {
                 rc.move(toTarget);
-                ourLocation = ourLocation.add(toTarget);
 
-                if (isCommander) {
-                    rc.writeSharedArray(0, targetLocation.x + targetLocation.y * 100 + 1);
-                }
-
-                if (attacks > 10 && rc.canBuild(TrapType.EXPLOSIVE, ourLocation)) {
+                if (attacks >= 6 && rc.canBuild(TrapType.EXPLOSIVE, ourLocation)) {
                     rc.build(TrapType.EXPLOSIVE, ourLocation);
-                    attacks--;
+                    attacks = 0;
                 }
+
+                ourLocation = ourLocation.add(toTarget);
             } else {
                 if (rc.canFill(ourLocation.add(toTarget))) {
                     rc.fill(ourLocation.add(toTarget));
-                }
-
-                if (isCommander) {
-                    rc.writeSharedArray(0, targetLocation.x + targetLocation.y * 100 + 1);
                 }
             }
         }
@@ -175,25 +256,13 @@ public strictfp class RobotPlayer {
         triedToAttack = false;
         triedToHeal = false;
 
-        // Heal if we can
-        if (willHeal) {
-            RobotInfo[] allies = rc.senseNearbyRobots(ourLocation, -1, ourTeam);
-            for (RobotInfo ally : allies) {
-                if (ally.health < 920 && rc.canHeal(ally.getLocation())) {
-                    triedToHeal = true;
-                    rc.heal(ally.getLocation());
-                    break;
-                }
-            }
-        }
-
         // Attack if we see someone
         RobotInfo[] enemies = rc.senseNearbyRobots(ourLocation, 4, enemyTeam);
         if (enemies.length > 0) {
             triedToAttack = true;
             RobotInfo bestEnemy = enemies[0];
             for (int i = 1; i < enemies.length; i++) {
-                if (rc.canAttack(enemies[i].getLocation()) && enemies[i].health < bestEnemy.health) {
+                if (enemies[i].health < bestEnemy.health && rc.canAttack(enemies[i].getLocation())) {
                     bestEnemy = enemies[i];
                 }
             }
@@ -201,6 +270,16 @@ public strictfp class RobotPlayer {
             if (rc.canAttack(bestEnemy.getLocation())) {
                 rc.attack(bestEnemy.getLocation());
                 attacks++;
+            }
+        }
+
+        // Heal if we can
+        RobotInfo[] allies = rc.senseNearbyRobots(ourLocation, 4, ourTeam);
+        for (RobotInfo ally : allies) {
+            if (ally.health < 920 && rc.canHeal(ally.getLocation())) {
+                triedToHeal = true;
+                rc.heal(ally.getLocation());
+                break;
             }
         }
 
@@ -249,9 +328,9 @@ public strictfp class RobotPlayer {
     }
 
     public static PathPlanner.MapType mapInfoToMapType(RobotController rc, MapInfo mapInfo) {
-//        if (!mapInfo.isWater()) {
-//            return PathPlanner.MapType.WATER;
-//        }
+        if (mapInfo.isWall()) {
+            return PathPlanner.MapType.WALL;
+        }
 
         if (!mapInfo.isPassable()) {
             return PathPlanner.MapType.NOT_PASSABLE;

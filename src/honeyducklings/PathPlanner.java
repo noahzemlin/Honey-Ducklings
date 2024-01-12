@@ -3,10 +3,8 @@ package honeyducklings;
 import battlecode.common.Clock;
 import battlecode.common.Direction;
 import battlecode.common.MapLocation;
-import battlecode.common.RobotController;
 
-import java.util.ArrayList;
-import java.util.PriorityQueue;
+import java.util.Map;
 
 import static java.lang.Math.*;
 
@@ -21,8 +19,29 @@ public class PathPlanner {
     public static class ANode {
         public boolean open = false;
         public double g = 1000000;
-        public double f = 1000000;
         public MapLocation cameFrom = null;
+    }
+
+    public static class QueueItem {
+        public QueueItem nextItem = null;
+        public double f;
+        public int x;
+        public int y;
+
+        public QueueItem(double f, int x, int y) {
+            this.f = f;
+            this.x = x;
+            this.y = y;
+        }
+
+        public QueueItem setNext(QueueItem item) {
+            this.nextItem = item;
+            return this;
+        }
+
+        public MapLocation getLocation() {
+            return new MapLocation(x, y);
+        }
     }
 
     public static boolean hasPrinted = false;
@@ -38,10 +57,6 @@ public class PathPlanner {
             Direction.NORTHWEST,
     };
 
-    public static Direction getFirstStep() {
-        return Direction.CENTER;
-    }
-
     public static double h(MapLocation node, MapLocation goal) {
 //        return (abs(node.x - goal.x) + abs(node.y - goal.y)) / 2.0;
         return sqrt(pow(node.x - goal.x, 2) + pow(node.y - goal.y, 2));
@@ -52,41 +67,42 @@ public class PathPlanner {
         int height = map[0].length;
 
         if (from.equals(to) || to.x < 0 || to.y < 0 || to.x >= width || to.y >= height) {
-            System.out.println("Tried to path no where lol");
             return Direction.CENTER;
         }
 
-        Direction firstStep = from.directionTo(to);
-        MapLocation firstStepLocation = from.add(firstStep);
+//        Direction firstStep = from.directionTo(to);
+//        MapLocation firstStepLocation = from.add(firstStep);
 
         // SHORT CUT BABY
-        if (map[firstStepLocation.x][firstStepLocation.y] == MapType.WATER || map[firstStepLocation.x][firstStepLocation.y] == MapType.EMPTY) {
-            return firstStep;
-        }
+//        if (map[firstStepLocation.x][firstStepLocation.y] == MapType.EMPTY) {
+//            return firstStep;
+//        }
 
-        MapLocation lastBacktrackLocation = to;
+//        System.out.println("Original to: " + to);
+//        int bytecodeBefore = Clock.getBytecodeNum();
 
-        int backTrackBeforeCost = Clock.getBytecodeNum();
-
-        while (true) {
-            Direction backtrack = lastBacktrackLocation.directionTo(from);
-            MapLocation backtrackLocation = lastBacktrackLocation.add(backtrack);
-
-            if (backtrackLocation.equals(from) || map[backtrackLocation.x][backtrackLocation.y] != MapType.EMPTY) {
-                break;
-            } else {
-                lastBacktrackLocation = backtrackLocation;
+        // Location must be acceptable! Search until we find one
+        while (map[to.x][to.y] != MapType.EMPTY) {
+            Direction backTrack = to.directionTo(from);
+            to = to.add(backTrack);
+            if (to.equals(from)) {
+                return Direction.CENTER;
             }
         }
 
-        int backTrackCost = Clock.getBytecodeNum() - backTrackBeforeCost;
+        // Okay, now keep going until we hit an obstacle
+        while (true) {
+            Direction backTrack = to.directionTo(from);
+            MapLocation backTrackLocation = to.add(backTrack);
 
-        to = lastBacktrackLocation;
-
-        if (map[to.x][to.y] != MapType.EMPTY) {
-//            System.out.println("Backtrack BAD");
-            return Direction.CENTER;
+            if (map[backTrackLocation.x][backTrackLocation.y] == MapType.EMPTY) {
+                to = backTrackLocation;
+            } else {
+                break;
+            }
         }
+
+//        System.out.println("Improved to: " + to + " from " + from + " using " + (Clock.getBytecodeNum() - bytecodeBefore) + " bytes");
 
         if (from.isAdjacentTo(to)) {
             return from.directionTo(to);
@@ -102,44 +118,35 @@ public class PathPlanner {
 
         nodeMap[from.x][from.y].open = true;
         nodeMap[from.x][from.y].g = 0;
-        nodeMap[from.x][from.y].f = h(from, to);
 
         int openNodes = 1;
         int exploredNodes = 0;
 
+        QueueItem head = new QueueItem(0, from.x, from.y);
+
         while (openNodes > 0) {
 
-            // Dont burn all our bytecodes :(
+            // Don't burn all our bytecodes :(
 //            if (Clock.getBytecodesLeft() < 1000) {
 //                System.out.println("Out of byte codes :(");
 //                return Direction.CENTER;
 //            }
 
-            exploredNodes++;
-
-            MapLocation current = null;
-            double lowestF = 1000000;
-
-            for (int x = 0; x < width; x++) {
-                for (int y = 0; y < height; y++) {
-                    if (nodeMap[x][y].open && nodeMap[x][y].f < lowestF) {
-                        current = new MapLocation(x, y);
-                        lowestF = nodeMap[x][y].f;
-                    }
+            if (exploredNodes == 10) {
+                QueueItem lookingat = head;
+                while (lookingat != null) {
+//                    System.out.println(lookingat.f + ", ");
+                    lookingat = lookingat.nextItem;
                 }
             }
 
-            if (lowestF > 10000) {
-                // There is no good path
-                return Direction.CENTER;
-            }
+            exploredNodes++;
 
-            if (current == null) {
-                System.out.println("BAD");
-                continue;
-            }
+            MapLocation current = head.getLocation();
+            head = head.nextItem;
 
             nodeMap[current.x][current.y].open = false;
+            openNodes--;
 
             if (current.equals(to)) {
                 if (nodeMap[current.x][current.y].cameFrom == null) {
@@ -156,27 +163,7 @@ public class PathPlanner {
                     }
                 }
 
-//                System.out.println("Searched! Nodes: " + exploredNodes + ", Backtrack: " + backTrackCost + ", Search: " + (Clock.getBytecodeNum() - backTrackBeforeCost - backTrackCost));
-//
-//                if (map[current.x][current.y] != MapType.EMPTY && !hasPrinted) {
-//                    StringBuilder message = new StringBuilder();
-//                    for (int i = 0; i < width; i++) {
-//                        for (int j = 0; j < height; j++) {
-//                            if (i == from.x && j == from.y) {
-//                                message.append("O");
-//                            } else if (i == to.x && j == to.y) {
-//                                message.append("G");
-//                            } else if (map[i][j] == MapType.EMPTY) {
-//                                message.append(" ");
-//                            } else {
-//                                message.append("X");
-//                            }
-//                        }
-//                        message.append("\n");
-//                    }
-//                    System.out.println(message);
-//                    hasPrinted = true;
-//                }
+//                System.out.println("Searched! Nodes: " + exploredNodes);
 
                 return from.directionTo(current);
             }
@@ -192,23 +179,46 @@ public class PathPlanner {
                 double tentativeG = nodeMap[current.x][current.y].g + 1;
 
                 if (map[neighborX][neighborY] == MapType.WATER) {
-                    tentativeG += 1;
+                    tentativeG += 3;
                 } else if (map[neighborX][neighborY] != MapType.EMPTY) {
                     tentativeG += 10000; // DO NOT ENTER
                 }
 
                 if (tentativeG < nodeMap[neighborX][neighborY].g) {
+                    MapLocation neighborLocation = new MapLocation(neighborX, neighborY);
                     nodeMap[neighborX][neighborY].cameFrom = current;
                     nodeMap[neighborX][neighborY].g = tentativeG;
-                    nodeMap[neighborX][neighborY].f = tentativeG + h(new MapLocation(neighborX, neighborY), to);
-                    if (!nodeMap[neighborX][neighborY].open) {
+
+                    double fscore = tentativeG + h(neighborLocation, to);
+
+                    if (fscore < 20000 && !nodeMap[neighborX][neighborY].open) {
                         openNodes++;
+                        nodeMap[neighborX][neighborY].open = true;
+
+                        if (head == null) {
+                            head = new QueueItem(fscore, neighborX, neighborY);
+                        } else if (head.f > fscore) {
+                            head = new QueueItem(fscore, neighborX, neighborY).setNext(head);
+
+//                            System.out.println("Added new head to queue with score " + fscore);
+                        } else {
+                            QueueItem lookingAt = head;
+                            int maxQueueItems = 8;
+                            while (maxQueueItems >= 0 && lookingAt.nextItem != null && fscore > lookingAt.nextItem.f) {
+                                lookingAt = head.nextItem;
+                                maxQueueItems--;
+                            }
+
+//                            System.out.println("Added new item to queue with score " + fscore);
+
+                            lookingAt.nextItem = new QueueItem(fscore, neighborX, neighborY).setNext(lookingAt.nextItem);
+                        }
                     }
-                    nodeMap[neighborX][neighborY].open = true;
                 }
             }
         }
 
+        System.out.println("Out of explorable nodes!");
         return Direction.CENTER;
     }
 }
