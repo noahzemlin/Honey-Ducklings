@@ -1,4 +1,4 @@
-package honeyducklings;
+package honeyducklings_v2;
 
 import battlecode.common.Clock;
 import battlecode.common.Direction;
@@ -54,14 +54,6 @@ public class PathPlanner {
         if (from.equals(to) || to.x < 0 || to.y < 0 || to.x >= width || to.y >= height) {
             System.out.println("Tried to path no where lol");
             return Direction.CENTER;
-        }
-
-        Direction firstStep = from.directionTo(to);
-        MapLocation firstStepLocation = from.add(firstStep);
-
-        // SHORT CUT BABY
-        if (map[firstStepLocation.x][firstStepLocation.y] == MapType.WATER || map[firstStepLocation.x][firstStepLocation.y] == MapType.EMPTY) {
-            return firstStep;
         }
 
         MapLocation lastBacktrackLocation = to;

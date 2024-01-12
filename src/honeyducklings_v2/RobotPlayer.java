@@ -1,4 +1,4 @@
-package honeyducklings;
+package honeyducklings_v2;
 
 import battlecode.common.*;
 
@@ -10,7 +10,6 @@ public strictfp class RobotPlayer {
 
     private static PathPlanner.MapType[][] map;
     private static MapLocation[] allySpawnLocations;
-    private static Team ourTeam;
     private static Team enemyTeam;
     private static MapLocation safeCorner;
     private static MapLocation huddle;
@@ -19,10 +18,6 @@ public strictfp class RobotPlayer {
     private static int mapHeight;
     private static boolean willHeal;
     private static boolean isCommander = false;
-    private static int attacks = 0;
-
-    private static boolean triedToHeal = false;
-    private static boolean triedToAttack = false;
 
     public static void setup(RobotController rc) throws GameActionException {
 
@@ -34,10 +29,9 @@ public strictfp class RobotPlayer {
 
         random = new Random(2718);
 
-        ourTeam = rc.getTeam();
-        enemyTeam = ourTeam.opponent();
+        enemyTeam = rc.getTeam().opponent();
 
-        willHeal = rc.getID() % 4 == 0;
+        willHeal = rc.getID() % 3 == 0;
 
         mapWidth = rc.getMapWidth();
         mapHeight = rc.getMapHeight();
@@ -97,12 +91,51 @@ public strictfp class RobotPlayer {
 //            return;
 //        }
 
+        // Attack if we see someone
+        RobotInfo[] enemies = rc.senseNearbyRobots(4, enemyTeam);
+        boolean triedToAttack = false;
+        if (enemies.length > 0) {
+            triedToAttack = true;
+            RobotInfo bestEnemy = enemies[0];
+            for (int i = 1; i < enemies.length; i++) {
+                if (rc.canAttack(enemies[i].getLocation()) && enemies[i].health < bestEnemy.health) {
+                    bestEnemy = enemies[i];
+                }
+            }
+
+            if (rc.canAttack(bestEnemy.getLocation())) {
+                rc.attack(bestEnemy.getLocation());
+            }
+        }
+
+        // Heal if we can
+        boolean triedToHeal = false;
+        if (willHeal) {
+            RobotInfo[] allies = rc.senseNearbyRobots(-1, rc.getTeam());
+            for (RobotInfo ally : allies) {
+                if (ally.health < 500 && rc.canHeal(ally.getLocation())) {
+                    triedToHeal = true;
+                    rc.heal(ally.getLocation());
+                    break;
+                }
+            }
+        }
+
+        // Pick up flag if we can
+        FlagInfo[] enemyFlags = rc.senseNearbyFlags(-1, enemyTeam);
+        for (FlagInfo enemyFlag: enemyFlags) {
+            if (rc.canPickupFlag(enemyFlag.getLocation())) {
+                rc.pickupFlag(enemyFlag.getLocation());
+                break;
+            }
+        }
+
         // For now, just move to enemy flag
-        MapLocation ourLocation = rc.getLocation();
-        if (!triedToHeal && rc.isMovementReady()) {
+        if (!triedToAttack && !triedToHeal && rc.isMovementReady()) {
             // Check our surroundings and add to our map estimate
             analyzeSurroundings(rc);
 
+            MapLocation ourLocation = rc.getLocation();
             MapLocation targetLocation = ourLocation;
 
             // Huddle up by default
@@ -150,15 +183,13 @@ public strictfp class RobotPlayer {
 
             if (rc.canMove(toTarget)) {
                 rc.move(toTarget);
-                ourLocation = ourLocation.add(toTarget);
 
                 if (isCommander) {
                     rc.writeSharedArray(0, targetLocation.x + targetLocation.y * 100 + 1);
                 }
 
-                if (attacks > 10 && rc.canBuild(TrapType.EXPLOSIVE, ourLocation)) {
-                    rc.build(TrapType.EXPLOSIVE, ourLocation);
-                    attacks--;
+                if (rc.canBuild(TrapType.STUN, ourLocation)) {
+                    rc.build(TrapType.STUN, ourLocation);
                 }
             } else {
                 if (rc.canFill(ourLocation.add(toTarget))) {
@@ -167,50 +198,6 @@ public strictfp class RobotPlayer {
 
                 if (isCommander) {
                     rc.writeSharedArray(0, targetLocation.x + targetLocation.y * 100 + 1);
-                }
-            }
-        }
-
-        // Now that we've moved, try to take actions
-        triedToAttack = false;
-        triedToHeal = false;
-
-        // Heal if we can
-        if (willHeal) {
-            RobotInfo[] allies = rc.senseNearbyRobots(ourLocation, -1, ourTeam);
-            for (RobotInfo ally : allies) {
-                if (ally.health < 920 && rc.canHeal(ally.getLocation())) {
-                    triedToHeal = true;
-                    rc.heal(ally.getLocation());
-                    break;
-                }
-            }
-        }
-
-        // Attack if we see someone
-        RobotInfo[] enemies = rc.senseNearbyRobots(ourLocation, 4, enemyTeam);
-        if (enemies.length > 0) {
-            triedToAttack = true;
-            RobotInfo bestEnemy = enemies[0];
-            for (int i = 1; i < enemies.length; i++) {
-                if (rc.canAttack(enemies[i].getLocation()) && enemies[i].health < bestEnemy.health) {
-                    bestEnemy = enemies[i];
-                }
-            }
-
-            if (rc.canAttack(bestEnemy.getLocation())) {
-                rc.attack(bestEnemy.getLocation());
-                attacks++;
-            }
-        }
-
-        // Pick up flag if we can
-        if (rc.getLocation() != null) {
-            FlagInfo[] enemyFlags = rc.senseNearbyFlags(-1, enemyTeam);
-            for (FlagInfo enemyFlag : enemyFlags) {
-                if (rc.canPickupFlag(enemyFlag.getLocation())) {
-                    rc.pickupFlag(enemyFlag.getLocation());
-                    break;
                 }
             }
         }
