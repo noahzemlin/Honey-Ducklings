@@ -1,4 +1,4 @@
-package honeyducklings;
+package honeyducklings_v4;
 
 import battlecode.common.Clock;
 import battlecode.common.Direction;
