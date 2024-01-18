@@ -6,14 +6,19 @@ import battlecode.common.RobotController;
 
 public class PathPlanner {
 
-    private static final int[] nextIndicies = {
-            1, 2, 3, -3, -2, -1
+    private static final int[] CWSearch = {
+            0, 1, 2, 3
+    };
+
+    private static final int[] CCWSearch = {
+            0, -1, -2, -3, -4, -5, -6, -7, -8
     };
 
     private static MapLocation lastFrom;
     private static MapLocation lastTarget;
     private static int lastDirectionIndex = 0;
     private static boolean onObstacle = false;
+    private static int roundsOnObstacle = 0;
 
     public static Direction planRoute(RobotController rc, MapLocation fromLocation, MapLocation goalLocation) {
 
@@ -22,11 +27,20 @@ public class PathPlanner {
             lastFrom = fromLocation;
             lastTarget = goalLocation;
             onObstacle = false;
-            lastDirectionIndex = fromLocation.directionTo(goalLocation).ordinal();
+            roundsOnObstacle = 0;
+        }
+
+        rc.setIndicatorLine(lastFrom, lastTarget, 200, 200, 200);
+
+        // Stop sticking to the obstacle when we get on the line
+        if (onObstacle && onLine(fromLocation, lastFrom, lastTarget)) {
+            onObstacle = false;
+            roundsOnObstacle = 0;
         }
 
         // If not currently following an obstacle, move in the best direction
         if (!onObstacle) {
+            lastDirectionIndex = fromLocation.directionTo(goalLocation).ordinal();
             Direction testDirection = Direction.values()[lastDirectionIndex];
 
             if (canMove(rc, testDirection)) {
@@ -37,63 +51,43 @@ public class PathPlanner {
             onObstacle = true;
         }
 
-        // First, find the indicies that separate can and cannot
-        int testIndex = lastDirectionIndex;
-        int steps = 0;
+        rc.setIndicatorString("On obstacle for " + roundsOnObstacle + " rounds!");
 
-        while (true) {
-            Direction testDirection = Direction.values()[(testIndex + 8) % 8];
-
-            // Searching CW
-            if (steps >= 0) {
-                // If we can still move, keep going
-                if (canMove(rc, testDirection)) {
-                    testIndex++;
-                    steps++;
-
-                    // Don't go behind, start looking CCW
-                    if (steps > 3) {
-                        testIndex = lastDirectionIndex - 1;
-                        steps = -1;
-                    }
-
-                    continue;
-                }
-
-                // If we can't move AND it's not forward, we found the location!
-                if (steps >= 1) {
-                    testIndex--;
-                    break;
-                }
-
-                // If we can't move, and it IS forward, we need to look CCW
-                steps = -1;
-            }
-
-            // Searching CCW
-            if (steps < 0) {
-                if (canMove(rc, testDirection)) {
-                    testIndex--;
-                    steps--;
-
-                    // No solution!
-                    if (steps < -3) {
-                        return null;
-                    }
-                } else {
-                    // Can't move, found our target!
-                    testIndex++;
-                    break;
-                }
-            }
-        }
-
-        Direction finalDirection = Direction.values()[(testIndex + 8) % 8];
-        if (onLine(rc.getLocation().add(finalDirection), lastFrom, lastTarget)) {
+        if (roundsOnObstacle >= 10) {
             onObstacle = false;
+            roundsOnObstacle = 0;
+        }
+        roundsOnObstacle++;
+
+        // Can we continue how we were going?
+        if (canMove(rc, indexToDirection(lastDirectionIndex))) {
+            // See if we can hug closer (looking CW)
+            for (int i = 1; i < CWSearch.length; i++) {
+                if (!canMove(rc, indexToDirection(lastDirectionIndex + CWSearch[i]))) {
+                    // Found a place we can't move, go back one
+                    lastDirectionIndex = (lastDirectionIndex + CWSearch[i-1] + 8) % 8;
+
+                    return indexToDirection(lastDirectionIndex);
+                }
+            }
+
+            // If not, then let's just keep going that way and assume the obstacle "disappeared"
+//            onObstacle = false;
+//            roundsOnObstacle = 0;
+            return indexToDirection(lastDirectionIndex);
         }
 
-        return finalDirection;
+        // If in front is not good, we have to look CCW
+        for (int i=1; i < CCWSearch.length; i++) {
+            if (canMove(rc, indexToDirection(lastDirectionIndex + CCWSearch[i]))) {
+                // Found a place we can go!
+                lastDirectionIndex = (lastDirectionIndex + CCWSearch[i] + 8) % 8;
+
+                return indexToDirection(lastDirectionIndex);
+            }
+        }
+
+        return null;
     }
 
     public static boolean canMove(RobotController rc, Direction direction) {
@@ -101,11 +95,15 @@ public class PathPlanner {
     }
 
     public static boolean onLine(MapLocation tp, MapLocation p1, MapLocation p2) {
-        return Math.abs(eucDistance(tp, p1) + eucDistance(tp, p2) - eucDistance(p1, p2)) < 1.0;
+        return Math.abs(eucDistance(tp, p1) + eucDistance(tp, p2) - eucDistance(p1, p2)) < 0.5;
     }
 
     public static double eucDistance(MapLocation p1, MapLocation p2) {
         return Math.sqrt(Math.pow(p1.x - p2.x, 2) + Math.pow(p1.y - p2.y, 2));
+    }
+
+    public static Direction indexToDirection(int index) {
+        return Direction.values()[(index + 8) % 8];
     }
 }
 

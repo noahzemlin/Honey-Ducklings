@@ -239,7 +239,7 @@ public class PathPlanner {
             }
         }
 
-        System.out.println("Out of explorable nodes!");
+//        System.out.println("Out of explorable nodes!");
         return Direction.CENTER;
     }
 }

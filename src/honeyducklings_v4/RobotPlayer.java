@@ -243,7 +243,7 @@ public strictfp class RobotPlayer {
 
             rc.setIndicatorString("Moving " + toTarget + " to target.");
 
-            if (rc.canMove(toTarget)) {
+            if (rc.canMove(toTarget) && rc.isSpawned()) {
                 rc.move(toTarget);
 
                 if (attacks >= 6 && rc.canBuild(TrapType.EXPLOSIVE, ourLocation)) {
@@ -262,6 +262,10 @@ public strictfp class RobotPlayer {
         // Now that we've moved, try to take actions
         triedToAttack = false;
         triedToHeal = false;
+
+        if (!rc.isSpawned()) {
+            return;
+        }
 
         // Attack if we see someone
         RobotInfo[] enemies = rc.senseNearbyRobots(ourLocation, 4, enemyTeam);
