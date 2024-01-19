@@ -1,4 +1,4 @@
-package honeyducklings;
+package honeyducklings_v5;
 
 import battlecode.common.*;
 
