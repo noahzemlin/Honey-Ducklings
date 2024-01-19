@@ -2,6 +2,10 @@
 
 This is the code for the Honey Ducklings team as part of MIT Battlecode 2024 https://battlecode.org/
 
+## Version 8
+
+Added splitting the group into two under circumstances where lots of flags are captured.
+
 ## Version 7
 
 Finally remembered to actually choose upgrades. Our upgrade path will be attacking > healing > capturing.
