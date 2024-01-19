@@ -2,6 +2,10 @@
 
 This is the code for the Honey Ducklings team as part of MIT Battlecode 2024 https://battlecode.org/
 
+## Version 6
+
+Added basic setup with water+stun traps. Attempted to reduce teammates blocking each other.
+
 ## Version 5
 
 Major overhaul. Replaced A* with Bug2. Added flag tracking.
