@@ -2,6 +2,12 @@
 
 This is the code for the Honey Ducklings team as part of MIT Battlecode 2024 https://battlecode.org/
 
+## Version 7
+
+Finally remembered to actually choose upgrades. Our upgrade path will be attacking > healing > capturing.
+
+Ideally, capturing would be the highest but I don't really benefit from either effect based on my agent behavior.
+
 ## Version 6
 
 Added basic setup with water+stun traps. Attempted to reduce teammates blocking each other.

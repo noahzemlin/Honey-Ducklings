@@ -1,4 +1,4 @@
-package honeyducklings;
+package honeyducklings_v7;
 
 import battlecode.common.GameActionException;
 import battlecode.common.GlobalUpgrade;
