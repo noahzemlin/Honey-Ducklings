@@ -2,6 +2,10 @@
 
 This is the code for the Honey Ducklings team as part of MIT Battlecode 2024 https://battlecode.org/
 
+## Version 9
+
+Chase enemies
+
 ## Version 8
 
 Added splitting the group into two under circumstances where lots of flags are captured.

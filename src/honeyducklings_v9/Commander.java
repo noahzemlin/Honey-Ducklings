@@ -1,14 +1,38 @@
-package honeyducklings_v5;
+package honeyducklings_v9;
 
 import battlecode.common.GameActionException;
+import battlecode.common.GlobalUpgrade;
 import battlecode.common.MapLocation;
 import battlecode.common.RobotController;
 
 public class Commander {
 
     private static FlagStatus[] flags = new FlagStatus[3];
+    private static int upgradeStatus = 0;
 
     public static void commandTheLegion(RobotController rc) throws GameActionException {
+
+        // Let's actually use our upgrades lol
+        switch (upgradeStatus) {
+            case 0:
+                if (rc.canBuyGlobal(GlobalUpgrade.ATTACK) ) {
+                    rc.buyGlobal(GlobalUpgrade.ATTACK);
+                    upgradeStatus++;
+                }
+                break;
+            case 1:
+                if (rc.canBuyGlobal(GlobalUpgrade.HEALING) ) {
+                    rc.buyGlobal(GlobalUpgrade.HEALING);
+                    upgradeStatus++;
+                }
+                break;
+            case 2:
+                if (rc.canBuyGlobal(GlobalUpgrade.CAPTURING) ) {
+                    rc.buyGlobal(GlobalUpgrade.CAPTURING);
+                    upgradeStatus++;
+                }
+                break;
+        }
 
         if (flags[0] == null) {
             flags[0] = new FlagStatus(3);
@@ -17,13 +41,19 @@ public class Commander {
         }
 
         MapLocation commandedLocation = null;
+        MapLocation commandedLocationSecondary = null;
 
         // Update flag info and set command to first flag
         for (FlagStatus flagStatus : flags) {
             if (flagStatus.fetchId(rc) != -1 && !flagStatus.isCaptured) {
                 flagStatus.loadFlagStatus(rc);
                 flagStatus.applyReports(rc);
-                commandedLocation = flagStatus.location;
+
+                if (commandedLocation == null) {
+                    commandedLocation = flagStatus.location;
+                } else {
+                    commandedLocationSecondary = flagStatus.location;
+                }
             }
         }
 
@@ -37,5 +67,6 @@ public class Commander {
         }
 
         Utils.writeLocationToArray(rc, RobotPlayer.ARR_COMMAND, commandedLocation);
+        Utils.writeLocationToArray(rc, RobotPlayer.ARR_COMMAND_SECONDARY, commandedLocationSecondary);
     }
 }

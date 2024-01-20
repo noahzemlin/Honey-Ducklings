@@ -1,4 +1,4 @@
-package honeyducklings_v6;
+package honeyducklings_v9;
 
 import battlecode.common.*;
 
@@ -28,7 +28,7 @@ public class PathPlanner {
             roundsOnObstacle = 0;
         }
 
-        rc.setIndicatorLine(lastFrom, lastTarget, 200, 200, 200);
+//        rc.setIndicatorLine(lastFrom, lastTarget, 200, 200, 200);
 
         // Stop sticking to the obstacle when we get on the line
         if (onObstacle && onLine(fromLocation, lastFrom, lastTarget)) {
@@ -48,6 +48,7 @@ public class PathPlanner {
             if (rc.canSenseLocation(fromLocation.add(testDirection))) {
                 MapInfo blockedArea = rc.senseMapInfo(fromLocation.add(testDirection));
                 if (blockedArea != null && !blockedArea.isWall()) {
+                    rc.setIndicatorString("On obstacle for " + roundsOnObstacle + " rounds!");
                     return null;
                 }
             }

@@ -1,4 +1,4 @@
-package honeyducklings_v6;
+package honeyducklings_v9;
 
 import battlecode.common.GameActionException;
 import battlecode.common.MapLocation;

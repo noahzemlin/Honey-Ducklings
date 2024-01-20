@@ -1,4 +1,4 @@
-package honeyducklings_v5;
+package honeyducklings_v9;
 
 import battlecode.common.FlagInfo;
 import battlecode.common.GameActionException;
