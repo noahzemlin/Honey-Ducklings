@@ -1,8 +1,6 @@
-package honeyducklings;
+package honeyducklings_v10;
 
 import battlecode.common.*;
-
-import java.util.Random;
 
 public class PathPlanner {
 
@@ -10,16 +8,8 @@ public class PathPlanner {
             0, 1, 2, 3
     };
 
-    private static final int[] CWSearchCCW = {
-            0, -1, -2, -3, -4, -5, -6, -7, -8
-    };
-
     private static final int[] CCWSearch = {
-            0, -1, -2, -3
-    };
-
-    private static final int[] CCWSearchCW = {
-            0, 1, 2, 3, 4, 5, 6, 7, 8
+            0, -1, -2, -3, -4, -5, -6, -7, -8
     };
 
     private static MapLocation lastFrom;
@@ -27,13 +17,8 @@ public class PathPlanner {
     private static int lastDirectionIndex = 0;
     private static boolean onObstacle = false;
     private static int roundsOnObstacle = 0;
-    private static Random random = new Random(2718);
 
     public static Direction planRoute(RobotController rc, MapLocation fromLocation, MapLocation goalLocation) throws GameActionException {
-
-        if (fromLocation.equals(goalLocation)) {
-            return Direction.CENTER;
-        }
 
         // Are we still on the same path?
         if (lastTarget == null || !lastTarget.equals(goalLocation)) {
@@ -63,7 +48,8 @@ public class PathPlanner {
             if (rc.canSenseLocation(fromLocation.add(testDirection))) {
                 MapInfo blockedArea = rc.senseMapInfo(fromLocation.add(testDirection));
                 if (blockedArea != null && !blockedArea.isWall()) {
-                    roundsOnObstacle = 13;
+                    rc.setIndicatorString("On obstacle for " + roundsOnObstacle + " rounds!");
+                    return null;
                 }
             }
 
@@ -79,21 +65,13 @@ public class PathPlanner {
         }
         roundsOnObstacle++;
 
-        int[] primSearch = CWSearch;
-        int[] secSearch = CWSearchCCW;
-
-        if (random.nextBoolean()) {
-            primSearch = CCWSearch;
-            secSearch = CCWSearchCW;
-        }
-
         // Can we continue how we were going?
         if (canMove(rc, indexToDirection(lastDirectionIndex))) {
             // See if we can hug closer (looking CW)
-            for (int i = 1; i < primSearch.length; i++) {
-                if (!canMove(rc, indexToDirection(lastDirectionIndex + primSearch[i]))) {
+            for (int i = 1; i < CWSearch.length; i++) {
+                if (!canMove(rc, indexToDirection(lastDirectionIndex + CWSearch[i]))) {
                     // Found a place we can't move, go back one
-                    lastDirectionIndex = (lastDirectionIndex + primSearch[i-1] + 8) % 8;
+                    lastDirectionIndex = (lastDirectionIndex + CWSearch[i-1] + 8) % 8;
 
                     return indexToDirection(lastDirectionIndex);
                 }
@@ -106,10 +84,10 @@ public class PathPlanner {
         }
 
         // If in front is not good, we have to look CCW
-        for (int i=1; i < secSearch.length; i++) {
-            if (canMove(rc, indexToDirection(lastDirectionIndex + secSearch[i]))) {
+        for (int i=1; i < CCWSearch.length; i++) {
+            if (canMove(rc, indexToDirection(lastDirectionIndex + CCWSearch[i]))) {
                 // Found a place we can go!
-                lastDirectionIndex = (lastDirectionIndex + secSearch[i] + 8) % 8;
+                lastDirectionIndex = (lastDirectionIndex + CCWSearch[i] + 8) % 8;
 
                 return indexToDirection(lastDirectionIndex);
             }

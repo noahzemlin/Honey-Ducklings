@@ -1,10 +1,8 @@
-package honeyducklings;
+package honeyducklings_v10;
 
 import battlecode.common.*;
 
 import java.util.Random;
-
-import static java.lang.Math.sqrt;
 
 public strictfp class RobotPlayer {
 
@@ -41,6 +39,7 @@ public strictfp class RobotPlayer {
     private static boolean isCommander = false;
     private static int duckId = 0;
     private static int attacks = 0;
+    private static int retreatingTicks = 0;
     private static FlagStatus carryingFlag = null;
     public static Direction[] reasonableDirections = {
             Direction.NORTH,
@@ -54,6 +53,7 @@ public strictfp class RobotPlayer {
     };
     private static final FlagStatus[] flags = new FlagStatus[3];
     private static FlagInfo[] visibleFlags;
+    private static boolean amDead = false;
 
     public static void setup(RobotController rc) throws GameActionException {
 
@@ -115,28 +115,22 @@ public strictfp class RobotPlayer {
         // Pick up flag if we can
         attemptToPickupFlag(rc);
 
-        // Some ducks will try to heal first (healers)
-        // Some will try to attack first (attackers)
-        if (duckId % 7 == 0) {
-            attemptToHeal(rc);
-        }
-
         RobotInfo attackedRobot = attemptToAttack(rc);;
 
-//        if (attackedRobot != null && rc.getLocation().distanceSquaredTo(attackedRobot.location) >= 4) {
-//            // Try to kite
-//            Direction kiteDirection = attackedRobot.location.directionTo(rc.getLocation());
-//            if (rc.canMove(kiteDirection)) {
-//                rc.move(kiteDirection);
-//            }
-//        }
+        if (attackedRobot != null && rc.getLocation().distanceSquaredTo(attackedRobot.location) >= 4) {
+            // Try to kite
+            Direction kiteDirection = attackedRobot.location.directionTo(rc.getLocation());
+            if (rc.canMove(kiteDirection)) {
+                rc.move(kiteDirection);
+            }
+        }
 
         // Move if we can
         attemptToMove(rc, findTargetLocation(rc));
 
         // Some ducks will try to heal first (healers)
         // Some will try to attack first (attackers)
-        if (duckId % 7 == 0) {
+        if (duckId % 3 == 0) {
             attemptToHeal(rc);
             attemptToAttack(rc);
         } else {
@@ -155,12 +149,11 @@ public strictfp class RobotPlayer {
                 if (rc.canBuild(TrapType.WATER, location)) {
                     rc.build(TrapType.WATER, location);
                 }
+            } else {
+                if (rc.canBuild(TrapType.STUN, location)) {
+                    rc.build(TrapType.STUN, location);
+                }
             }
-//            } else {
-//                if (rc.canBuild(TrapType.STUN, location)) {
-//                    rc.build(TrapType.STUN, location);
-//                }
-//            }
         }
     }
 
@@ -186,47 +179,15 @@ public strictfp class RobotPlayer {
     }
 
     public static boolean attemptToSpawn(RobotController rc) throws GameActionException {
-
-//        for (MapLocation spawnLocation : allySpawnLocations) {
-//            if (random.nextInt(5) <= 3) {
-//                continue;
-//            }
-//            if (rc.canSpawn(spawnLocation)) {
-//                rc.spawn(spawnLocation);
-//                attacks = 0;
-//                return true;
-//            }
-//        }
-
-//        if (rc.canSpawn(allySpawnLocations[duckId % allySpawnLocations.length])) {
-//            rc.spawn(allySpawnLocations[duckId % allySpawnLocations.length]);
-//            return true;
-//        }
-
-        MapLocation targetLocation = allySpawnLocations[duckId % allySpawnLocations.length];
-
-        MapLocation command = Utils.locationFromArray(rc, ARR_COMMAND);
-        MapLocation commandSecondary = Utils.locationFromArray(rc, ARR_COMMAND_SECONDARY);
-
-        if (command != null) {
-            targetLocation = command;
-        }
-
-        if (duckId % 2 == 1 && commandSecondary != null) {
-            targetLocation = commandSecondary;
-        }
-
-        MapLocation bestSpawn = null;
-        int bestSpawnDistToCommand = 1000000;
         for (MapLocation spawnLocation : allySpawnLocations) {
-            if (rc.canSpawn(spawnLocation) && spawnLocation.distanceSquaredTo(targetLocation) < bestSpawnDistToCommand) {
-                bestSpawn = spawnLocation;
-                bestSpawnDistToCommand = spawnLocation.distanceSquaredTo(targetLocation);
+            if (random.nextInt(5) <= 3) {
+                continue;
             }
-        }
-
-        if (bestSpawn != null && rc.canSpawn(bestSpawn)) {
-            rc.spawn(bestSpawn);
+            if (rc.canSpawn(spawnLocation)) {
+                rc.spawn(spawnLocation);
+                attacks = 0;
+                return true;
+            }
         }
 
         return false;
@@ -279,8 +240,8 @@ public strictfp class RobotPlayer {
             rc.move(toTarget);
 
             // Build trap behind us IF we have recent kills
-            if (attacks >= 10 && rc.canBuild(TrapType.EXPLOSIVE, rc.getLocation()) && rc.getCrumbs() >= 350) {
-                rc.build(TrapType.EXPLOSIVE, rc.getLocation());
+            if (attacks >= 10 && rc.canBuild(TrapType.EXPLOSIVE, prevLocation) && rc.getCrumbs() >= 350) {
+                rc.build(TrapType.EXPLOSIVE, prevLocation);
                 attacks = 0;
             }
 
@@ -304,30 +265,6 @@ public strictfp class RobotPlayer {
             targetLocation = commandSecondary;
         }
 
-        // If we are already at the commanded location, spread out
-//        if (rc.getLocation().distanceSquaredTo(targetLocation) < 20) {
-        RobotInfo[] nearbyAllies = rc.senseNearbyRobots(4, ourTeam);
-
-        if (nearbyAllies.length > 0) {
-            Direction bestDirection = Direction.CENTER;
-            double bestHeuristic = -100000;
-
-            for (Direction direction : Direction.values()) {
-                MapLocation directionPlacement = rc.getLocation().add(direction);
-                double heuristic = directionPlacement.distanceSquaredTo(Utils.getNearestRobot(directionPlacement, nearbyAllies));
-
-                if (heuristic > bestHeuristic) {
-                    bestHeuristic = heuristic;
-                    bestDirection = direction;
-                }
-            }
-
-            if (bestDirection != Direction.CENTER) {
-                targetLocation = rc.getLocation().add(bestDirection);
-            }
-        }
-//        }
-
         // If we see a flag, go get it
         for(FlagInfo flag : visibleFlags) {
             if (flag.getTeam().equals(enemyTeam) && !flag.isPickedUp()) {
@@ -342,7 +279,7 @@ public strictfp class RobotPlayer {
         }
 
         // Early game mine placement
-        if (rc.getRoundNum() < 50) {
+        if (rc.getRoundNum() < 80) {
             // Find nearest spawn location
             MapLocation nearestSpawnLocation = allySpawnLocations[0];
             for (int i=0; i<allySpawnLocations.length; i++) {
@@ -384,36 +321,56 @@ public strictfp class RobotPlayer {
             carryingFlag = null;
         }
 
+        RobotInfo[] nearbyEnemies = rc.senseNearbyRobots(20, enemyTeam);
+        if (nearbyEnemies.length > 0) {
+
+            MapLocation nearestEnemy = nearbyEnemies[0].location;
+
+            for (int i=1; i<nearbyEnemies.length; i++) {
+                if (rc.getLocation().distanceSquaredTo(nearbyEnemies[i].location) < rc.getLocation().distanceSquaredTo(nearestEnemy)) {
+                    nearestEnemy = nearbyEnemies[i].location;
+                }
+            }
+
+            Direction bestKiteDirection = Direction.CENTER;
+            int bestDistance = 10000;
+
+            for (Direction direction : Direction.values()) {
+                MapLocation directionPlacement = rc.getLocation().add(direction);
+                int distance = nearestEnemy.distanceSquaredTo(directionPlacement);
+
+                if (distance >= 4 && distance < bestDistance) {
+                    bestDistance = distance;
+                    bestKiteDirection = direction;
+                }
+            }
+
+            if (bestKiteDirection != Direction.CENTER) {
+                targetLocation = rc.getLocation().add(bestKiteDirection);
+            }
+        }
+
         MapLocation[] crumbs = rc.senseNearbyCrumbs(-1);
         if (crumbs.length > 0) {
             targetLocation = crumbs[0];
         }
 
-        // If there are nearby enemies, go into "battle" mode and focus on attacking and micro
-        RobotInfo[] nearbyEnemies = rc.senseNearbyRobots(20, enemyTeam);
-        if (nearbyEnemies.length > 0) {
-//            RobotInfo[] nearbyAllies = rc.senseNearbyRobots(20, ourTeam);
+        RobotInfo[] nearbyAllies = rc.senseNearbyRobots(20, ourTeam);
+        if (nearbyAllies.length > 0) {
+            MapLocation nearestAlly = nearbyAllies[0].location;
 
-            Direction bestDirection = Direction.CENTER;
-            double bestHeuristic = -100000;
-
-            for (Direction direction : Direction.values()) {
-                MapLocation directionPlacement = rc.getLocation().add(direction);
-                double heuristic = 5 * Utils.getSumRobotDistance(directionPlacement, nearbyEnemies)  +
-                                -10 * Math.sqrt(directionPlacement.distanceSquaredTo(Utils.getNearestRobot(directionPlacement, nearbyEnemies))) +
-                                3 * Utils.getSumRobotDistance(directionPlacement, nearbyAllies);
-
-                if (heuristic > bestHeuristic) {
-                    bestHeuristic = heuristic;
-                    bestDirection = direction;
+            for (int i=1; i<nearbyAllies.length; i++) {
+                if (rc.getLocation().distanceSquaredTo(nearbyAllies[i].location) < rc.getLocation().distanceSquaredTo(nearestAlly)) {
+                    nearestAlly = nearbyAllies[i].location;
                 }
             }
 
-            targetLocation = rc.getLocation().add(bestDirection);
-
-//            if (bestDirection != Direction.CENTER) {
-//                targetLocation = rc.getLocation().add(bestDirection);
-//            }
+            if (rc.getLocation().distanceSquaredTo(nearestAlly) >= 9) {
+                rc.setIndicatorString("Going to nearby ally!");
+                targetLocation = nearestAlly;
+            }
+        } else {
+            targetLocation = huddle;
         }
 
         if (targetLocation == null) {
@@ -428,7 +385,7 @@ public strictfp class RobotPlayer {
     public static RobotInfo attemptToHeal(RobotController rc) throws GameActionException {
         RobotInfo[] allies = rc.senseNearbyRobots(rc.getLocation(), 4, ourTeam);
         for (RobotInfo ally : allies) {
-            if (ally.health < (1000 - rc.getHealAmount()) && rc.canHeal(ally.getLocation())) {
+            if (ally.health < 920 && rc.canHeal(ally.getLocation())) {
                 rc.heal(ally.getLocation());
                 return ally;
             }
@@ -465,23 +422,6 @@ public strictfp class RobotPlayer {
         if (enemies.length > 0) {
             RobotInfo bestEnemy = enemies[0];
             for (int i = 1; i < enemies.length; i++) {
-                if (!rc.canAttack(enemies[i].location)) {
-                    continue;
-                }
-
-                // If we can finish them off, it's always the best option
-                if (enemies[i].health < rc.getAttackDamage()) {
-                    bestEnemy = enemies[i];
-                    break;
-                }
-
-                // Prio flag carriers
-                if (enemies[i].hasFlag()) {
-                    bestEnemy = enemies[i];
-                    break;
-                }
-
-                // Otherwise, choose the enemy that is weakest
                 if (enemies[i].health < bestEnemy.health && rc.canAttack(enemies[i].getLocation())) {
                     bestEnemy = enemies[i];
                 }

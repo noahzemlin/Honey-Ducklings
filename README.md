@@ -2,6 +2,10 @@
 
 This is the code for the Honey Ducklings team as part of MIT Battlecode 2024 https://battlecode.org/
 
+## Version 10
+
+Added heuristic function for planning around enemies. It might actually make things worse but it's a good idea.
+
 ## Version 9
 
 Chase enemies
