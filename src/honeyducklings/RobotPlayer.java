@@ -400,7 +400,7 @@ public strictfp class RobotPlayer {
             for (Direction direction : Direction.values()) {
                 MapLocation directionPlacement = rc.getLocation().add(direction);
                 double heuristic = 5 * Utils.getSumRobotDistance(directionPlacement, nearbyEnemies)  +
-                                -10 * Math.sqrt(directionPlacement.distanceSquaredTo(Utils.getNearestRobot(directionPlacement, nearbyEnemies))) +
+                                -20 * Math.sqrt(directionPlacement.distanceSquaredTo(Utils.getNearestRobot(directionPlacement, nearbyEnemies))) +
                                 3 * Utils.getSumRobotDistance(directionPlacement, nearbyAllies);
 
                 if (heuristic > bestHeuristic) {
