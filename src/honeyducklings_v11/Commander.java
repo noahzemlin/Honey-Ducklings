@@ -1,4 +1,4 @@
-package honeyducklings;
+package honeyducklings_v11;
 
 import battlecode.common.GameActionException;
 import battlecode.common.GlobalUpgrade;
@@ -12,8 +12,7 @@ public class Commander {
 
     public static void commandTheLegion(RobotController rc) throws GameActionException {
 
-        // Purchase an upgrade if we have an upgrade point
-        // In order Attack -> Healing -> Capturing
+        // Let's actually use our upgrades lol
         switch (upgradeStatus) {
             case 0:
                 if (rc.canBuyGlobal(GlobalUpgrade.ATTACK) ) {
@@ -35,14 +34,12 @@ public class Commander {
                 break;
         }
 
-        // Initialize flags
         if (flags[0] == null) {
             flags[0] = new FlagStatus(3);
             flags[1] = new FlagStatus(9);
             flags[2] = new FlagStatus(15);
         }
 
-        // Decide commanded (macro) locations
         MapLocation commandedLocation = null;
         MapLocation commandedLocationSecondary = null;
 
@@ -65,8 +62,7 @@ public class Commander {
             MapLocation[] sensedFlagLocations = rc.senseBroadcastFlagLocations();
 
             if (sensedFlagLocations.length > 0) {
-                int sensedFlagIndex = Math.min(sensedFlagLocations.length - 1, rc.getRoundNum() / 700);
-                commandedLocation = sensedFlagLocations[sensedFlagIndex];
+                commandedLocation = sensedFlagLocations[sensedFlagLocations.length - 1];
             }
         }
 

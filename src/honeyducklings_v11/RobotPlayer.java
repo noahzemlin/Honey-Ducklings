@@ -1,4 +1,4 @@
-package honeyducklings;
+package honeyducklings_v11;
 
 import battlecode.common.*;
 
@@ -54,8 +54,6 @@ public strictfp class RobotPlayer {
     private static FlagInfo[] visibleFlags;
 
     public static void setup(RobotController rc) throws GameActionException {
-
-        // First-time initialization stuff
 
         duckId = rc.readSharedArray(0);
         rc.writeSharedArray(0, duckId + 1);
@@ -123,6 +121,14 @@ public strictfp class RobotPlayer {
 
         RobotInfo attackedRobot = attemptToAttack(rc);;
 
+//        if (attackedRobot != null && rc.getLocation().distanceSquaredTo(attackedRobot.location) >= 4) {
+//            // Try to kite
+//            Direction kiteDirection = attackedRobot.location.directionTo(rc.getLocation());
+//            if (rc.canMove(kiteDirection)) {
+//                rc.move(kiteDirection);
+//            }
+//        }
+
         // Move if we can
         attemptToMove(rc, findTargetLocation(rc));
 
@@ -138,10 +144,6 @@ public strictfp class RobotPlayer {
     }
 
     private static void attemptToPlaceMine(RobotController rc) throws GameActionException {
-        // Place water mines in a lattice on our spawn locations
-        // Effectively guarantees victory against any agent that doesn't have filling implemented
-        // Also punishes agents that use too many crumbs and can't fill
-
         if (rc.getCrumbs() < 190) {
             return;
         }
@@ -152,6 +154,11 @@ public strictfp class RobotPlayer {
                     rc.build(TrapType.WATER, location);
                 }
             }
+//            } else {
+//                if (rc.canBuild(TrapType.STUN, location)) {
+//                    rc.build(TrapType.STUN, location);
+//                }
+//            }
         }
     }
 
@@ -178,7 +185,22 @@ public strictfp class RobotPlayer {
 
     public static boolean attemptToSpawn(RobotController rc) throws GameActionException {
 
-        // Attempt to spawn closest to the target location
+//        for (MapLocation spawnLocation : allySpawnLocations) {
+//            if (random.nextInt(5) <= 3) {
+//                continue;
+//            }
+//            if (rc.canSpawn(spawnLocation)) {
+//                rc.spawn(spawnLocation);
+//                attacks = 0;
+//                return true;
+//            }
+//        }
+
+//        if (rc.canSpawn(allySpawnLocations[duckId % allySpawnLocations.length])) {
+//            rc.spawn(allySpawnLocations[duckId % allySpawnLocations.length]);
+//            return true;
+//        }
+
         MapLocation targetLocation = allySpawnLocations[duckId % allySpawnLocations.length];
 
         MapLocation command = Utils.locationFromArray(rc, ARR_COMMAND);
@@ -203,7 +225,6 @@ public strictfp class RobotPlayer {
 
         if (bestSpawn != null && rc.canSpawn(bestSpawn)) {
             rc.spawn(bestSpawn);
-            attacks = 0;
         }
 
         return false;
@@ -256,8 +277,8 @@ public strictfp class RobotPlayer {
             rc.move(toTarget);
 
             // Build trap behind us IF we have recent kills
-            if (attacks >= 10 && rc.canBuild(TrapType.STUN, rc.getLocation()) && rc.getCrumbs() >= 200) {
-                rc.build(TrapType.STUN, rc.getLocation());
+            if (attacks >= 10 && rc.canBuild(TrapType.EXPLOSIVE, rc.getLocation()) && rc.getCrumbs() >= 350) {
+                rc.build(TrapType.EXPLOSIVE, rc.getLocation());
                 attacks = 0;
             }
 
@@ -268,10 +289,6 @@ public strictfp class RobotPlayer {
     }
 
     public static MapLocation findTargetLocation(RobotController rc) throws GameActionException {
-
-        // Generate many target locations
-        // Each test overwrites the previous as a "priority"
-
         MapLocation targetLocation = huddle;
 
         MapLocation command = Utils.locationFromArray(rc, ARR_COMMAND);
@@ -285,9 +302,10 @@ public strictfp class RobotPlayer {
             targetLocation = commandSecondary;
         }
 
+        // If we are already at the commanded location, spread out
+//        if (rc.getLocation().distanceSquaredTo(targetLocation) < 20) {
         RobotInfo[] nearbyAllies = rc.senseNearbyRobots(4, ourTeam);
 
-        // If we have nearby allies, use heuristic to move away from them in general
         if (nearbyAllies.length > 0) {
             Direction bestDirection = Direction.CENTER;
             double bestHeuristic = -100000;
@@ -306,6 +324,7 @@ public strictfp class RobotPlayer {
                 targetLocation = rc.getLocation().add(bestDirection);
             }
         }
+//        }
 
         // If we see a flag, go get it
         for(FlagInfo flag : visibleFlags) {
@@ -357,14 +376,12 @@ public strictfp class RobotPlayer {
             }
         }
 
-        // If we had the flag but now we don't, let the commander know
         if (!rc.hasFlag() && carryingFlag != null) {
             System.out.println("[Duck] Marking " + carryingFlag.id + " as dropped!");
             carryingFlag.drop(rc);
             carryingFlag = null;
         }
 
-        // Collect crumbs if we see them
         MapLocation[] crumbs = rc.senseNearbyCrumbs(-1);
         if (crumbs.length > 0) {
             targetLocation = crumbs[0];
@@ -373,6 +390,8 @@ public strictfp class RobotPlayer {
         // If there are nearby enemies, go into "battle" mode and focus on attacking and micro
         RobotInfo[] nearbyEnemies = rc.senseNearbyRobots(20, enemyTeam);
         if (nearbyEnemies.length > 0) {
+//            RobotInfo[] nearbyAllies = rc.senseNearbyRobots(20, ourTeam);
+
             Direction bestDirection = Direction.CENTER;
             double bestHeuristic = -100000;
 
@@ -389,6 +408,10 @@ public strictfp class RobotPlayer {
             }
 
             targetLocation = rc.getLocation().add(bestDirection);
+
+//            if (bestDirection != Direction.CENTER) {
+//                targetLocation = rc.getLocation().add(bestDirection);
+//            }
         }
 
         if (targetLocation == null) {
