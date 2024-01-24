@@ -6,8 +6,12 @@ import battlecode.common.RobotController;
 import battlecode.common.RobotInfo;
 
 public class Utils {
+    /**
+     * Retrieves a MapLocation stored at an index in the Shared Array
+     */
     public static MapLocation locationFromArray(RobotController rc, int index) throws GameActionException {
         int arrayValue = rc.readSharedArray(index) - 1;
+
         if (arrayValue == -1) {
             return null;
         }
@@ -15,6 +19,9 @@ public class Utils {
         return new MapLocation(arrayValue / 128, arrayValue % 128);
     }
 
+    /**
+     * Writes a MapLocation to an index in the Shared Array
+     */
     public static void writeLocationToArray(RobotController rc, int index, MapLocation location) throws GameActionException {
         if (location == null) {
             rc.writeSharedArray(index, 0);
@@ -24,6 +31,9 @@ public class Utils {
         rc.writeSharedArray(index, location.x * 128 + location.y + 1);
     }
 
+    /**
+     * Finds the nearest RobotInfo's MapLocation in an array of RobotInfo
+     */
     public static MapLocation getNearestRobot(MapLocation location, RobotInfo[] robots) {
         MapLocation nearestRobot = robots[0].location;
 
@@ -35,16 +45,10 @@ public class Utils {
 
         return nearestRobot;
     }
-    public static double getAverageRobotDistance(MapLocation location, RobotInfo[] robots) {
-        double sumRobotDistance = 0;
 
-        for (int i=1; i<robots.length; i++) {
-            sumRobotDistance += Math.sqrt(location.distanceSquaredTo(robots[i].location));
-        }
-
-        return sumRobotDistance / (double) robots.length;
-    }
-
+    /**
+     * Finds the sum of cartesian distances from a MapLocation to an array of RobotInfo
+     */
     public static double getSumRobotDistance(MapLocation directionPlacement, RobotInfo[] robots) {
         double sumRobotDistance = 0;
 

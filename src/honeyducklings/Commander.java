@@ -7,7 +7,7 @@ import battlecode.common.RobotController;
 
 public class Commander {
 
-    private static FlagStatus[] flags = new FlagStatus[3];
+    private static final FlagStatus[] flags = new FlagStatus[3];
     private static int upgradeStatus = 0;
 
     public static void commandTheLegion(RobotController rc) throws GameActionException {
@@ -37,9 +37,9 @@ public class Commander {
 
         // Initialize flags
         if (flags[0] == null) {
-            flags[0] = new FlagStatus(3);
-            flags[1] = new FlagStatus(9);
-            flags[2] = new FlagStatus(15);
+            flags[0] = new FlagStatus(HoneyConstants.ARR_FLAG_1);
+            flags[1] = new FlagStatus(HoneyConstants.ARR_FLAG_2);
+            flags[2] = new FlagStatus(HoneyConstants.ARR_FLAG_3);
         }
 
         // Decide commanded (macro) locations
@@ -65,12 +65,13 @@ public class Commander {
             MapLocation[] sensedFlagLocations = rc.senseBroadcastFlagLocations();
 
             if (sensedFlagLocations.length > 0) {
+                // Change target flag every 700 rounds to break stalemates
                 int sensedFlagIndex = Math.min(sensedFlagLocations.length - 1, rc.getRoundNum() / 700);
                 commandedLocation = sensedFlagLocations[sensedFlagIndex];
             }
         }
 
-        Utils.writeLocationToArray(rc, RobotPlayer.ARR_COMMAND, commandedLocation);
-        Utils.writeLocationToArray(rc, RobotPlayer.ARR_COMMAND_SECONDARY, commandedLocationSecondary);
+        Utils.writeLocationToArray(rc, HoneyConstants.ARR_COMMAND, commandedLocation);
+        Utils.writeLocationToArray(rc, HoneyConstants.ARR_COMMAND_SECONDARY, commandedLocationSecondary);
     }
 }

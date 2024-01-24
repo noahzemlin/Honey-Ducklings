@@ -5,41 +5,17 @@ import battlecode.common.*;
 import java.util.Random;
 
 public strictfp class RobotPlayer {
-
-    // Shared Array Values
-    //  0: Duck ID Claiming
-    //  1: Command Primary
-    //  2: Command Secondary
-    //  3: Flag 1 ID
-    //   : Flag 1 Location
-    //   : Flag 1 Set Location
-    //   : Flag 1 Carried
-    //   : Flag 1 Dropped
-    //   : Flag 1 Captured
-    //  9: Flag 2 ID
-    //   : Flag 2 Location
-    //   : Flag 2 Set Location
-    //   : Flag 2 Carried
-    //   : Flag 2 Dropped
-    //   : Flag 2 Captured
-    // 15: Flag 3 ID
-    //   : Flag 3 Location
-    //   : Flag 3 Set Location
-    //   : Flag 3 Carried
-    //   : Flag 3 Dropped
-    //   : Flag 3 Captured
-
-    public static final int ARR_COMMAND = 1;
-    public static final int ARR_COMMAND_SECONDARY = 2;
-    private static MapLocation[] allySpawnLocations;
-    private static Team ourTeam;
-    private static Team enemyTeam;
-    private static MapLocation huddle;
     private static Random random;
-    private static boolean isCommander = false;
-    private static int duckId = 0;
-    private static int attacks = 0;
-    private static FlagStatus carryingFlag = null;
+    private static MapLocation[] allySpawnLocations;
+    private static Team enemyTeam; // Probably saves bytecode over doing rc.getTeam().opponent() each time?
+    private static MapLocation huddle; // The average location of spawn locations as a "retreat" location
+    private static boolean isCommander = false; // Equivalent to duckId == 0, but useful for verbosity
+    private static int duckId = 0; // Turn order
+    private static int attacks = 0; // Track number of attacks between trap placement
+    private static FlagStatus carryingFlag = null; // The FlagStatus of the flag we are carrying, null if not carrying a flag
+    private static final FlagStatus[] flags = new FlagStatus[3]; // Status of the three enemy flags
+    private static FlagInfo[] visibleFlags;
+
     public static Direction[] reasonableDirections = {
             Direction.NORTH,
             Direction.NORTHEAST,
@@ -50,13 +26,11 @@ public strictfp class RobotPlayer {
             Direction.WEST,
             Direction.NORTHWEST,
     };
-    private static final FlagStatus[] flags = new FlagStatus[3];
-    private static FlagInfo[] visibleFlags;
 
+    /**
+     * Runs once at the beginning of the match
+     */
     public static void setup(RobotController rc) throws GameActionException {
-
-        // First-time initialization stuff
-
         duckId = rc.readSharedArray(0);
         rc.writeSharedArray(0, duckId + 1);
 
@@ -65,10 +39,7 @@ public strictfp class RobotPlayer {
         }
 
         random = new Random(2718);
-
-        ourTeam = rc.getTeam();
-        enemyTeam = ourTeam.opponent();
-
+        enemyTeam = rc.getTeam().opponent();
         allySpawnLocations = rc.getAllySpawnLocations();
 
         int sumSpawnLocationX = 0;
@@ -84,9 +55,9 @@ public strictfp class RobotPlayer {
 
         huddle = new MapLocation(averageSpawnLocationX, averageSpawnLocationY);
 
-        flags[0] = new FlagStatus(3);
-        flags[1] = new FlagStatus(9);
-        flags[2] = new FlagStatus(15);
+        flags[0] = new FlagStatus(HoneyConstants.ARR_FLAG_1);
+        flags[1] = new FlagStatus(HoneyConstants.ARR_FLAG_2);
+        flags[2] = new FlagStatus(HoneyConstants.ARR_FLAG_3);
     }
 
     // Run one turn for this duck
@@ -115,20 +86,20 @@ public strictfp class RobotPlayer {
         // Pick up flag if we can
         attemptToPickupFlag(rc);
 
-        // Some ducks will try to heal first (healers)
-        // Some will try to attack first (attackers)
-        if (duckId % 7 == 0) {
+        // If we are a healer duck, try to heal first
+        // Otherwise, only heal *after* we've moved to prioritize attacking always
+        if (duckId % HoneyConstants.HEALER_EVERY_NTH_DUCK == 0) {
             attemptToHeal(rc);
         }
 
-        RobotInfo attackedRobot = attemptToAttack(rc);;
+        // Attempt to attack before moving (in case we move out of attack range)
+        attemptToAttack(rc);
 
         // Move if we can
         attemptToMove(rc, findTargetLocation(rc));
 
-        // Some ducks will try to heal first (healers)
-        // Some will try to attack first (attackers)
-        if (duckId % 7 == 0) {
+        // Try to heal or attack again now that we may have moved
+        if (duckId % HoneyConstants.HEALER_EVERY_NTH_DUCK == 0) {
             attemptToHeal(rc);
             attemptToAttack(rc);
         } else {
@@ -142,7 +113,7 @@ public strictfp class RobotPlayer {
         // Effectively guarantees victory against any agent that doesn't have filling implemented
         // Also punishes agents that use too many crumbs and can't fill
 
-        if (rc.getCrumbs() < 190) {
+        if (rc.getCrumbs() < HoneyConstants.MIN_CRUMBS_FOR_SPAWN_TRAPS) {
             return;
         }
 
@@ -181,8 +152,8 @@ public strictfp class RobotPlayer {
         // Attempt to spawn closest to the target location
         MapLocation targetLocation = allySpawnLocations[duckId % allySpawnLocations.length];
 
-        MapLocation command = Utils.locationFromArray(rc, ARR_COMMAND);
-        MapLocation commandSecondary = Utils.locationFromArray(rc, ARR_COMMAND_SECONDARY);
+        MapLocation command = Utils.locationFromArray(rc, HoneyConstants.ARR_COMMAND);
+        MapLocation commandSecondary = Utils.locationFromArray(rc, HoneyConstants.ARR_COMMAND_SECONDARY);
 
         if (command != null) {
             targetLocation = command;
@@ -251,13 +222,13 @@ public strictfp class RobotPlayer {
             rc.fill(rc.getLocation().add(toTarget));
         }
 
+        // Now move if we can
         if (rc.canMove(toTarget)) {
-            MapLocation prevLocation = rc.getLocation();
             rc.move(toTarget);
 
             // Build trap behind us IF we have recent kills
-            if (attacks >= 10 && rc.canBuild(TrapType.STUN, rc.getLocation()) && rc.getCrumbs() >= 200) {
-                rc.build(TrapType.STUN, rc.getLocation());
+            if (attacks >= HoneyConstants.MIN_ATTACKS_BETWEEN_COMBAT_TRAPS && rc.canBuild(HoneyConstants.COMBAT_TRAP_TYPE, rc.getLocation()) && rc.getCrumbs() >= HoneyConstants.MIN_CRUMBS_FOR_COMBAT_TRAP) {
+                rc.build(HoneyConstants.COMBAT_TRAP_TYPE, rc.getLocation());
                 attacks = 0;
             }
 
@@ -274,8 +245,8 @@ public strictfp class RobotPlayer {
 
         MapLocation targetLocation = huddle;
 
-        MapLocation command = Utils.locationFromArray(rc, ARR_COMMAND);
-        MapLocation commandSecondary = Utils.locationFromArray(rc, ARR_COMMAND_SECONDARY);
+        MapLocation command = Utils.locationFromArray(rc, HoneyConstants.ARR_COMMAND);
+        MapLocation commandSecondary = Utils.locationFromArray(rc, HoneyConstants.ARR_COMMAND_SECONDARY);
 
         if (command != null) {
             targetLocation = command;
@@ -285,7 +256,7 @@ public strictfp class RobotPlayer {
             targetLocation = commandSecondary;
         }
 
-        RobotInfo[] nearbyAllies = rc.senseNearbyRobots(4, ourTeam);
+        RobotInfo[] nearbyAllies = rc.senseNearbyRobots(4, rc.getTeam());
 
         // If we have nearby allies, use heuristic to move away from them in general
         if (nearbyAllies.length > 0) {
@@ -321,7 +292,7 @@ public strictfp class RobotPlayer {
         }
 
         // Early game mine placement
-        if (rc.getRoundNum() < 50) {
+        if (rc.getRoundNum() < HoneyConstants.EARLY_GAME_STRAT_ROUNDS) {
             // Find nearest spawn location
             MapLocation nearestSpawnLocation = allySpawnLocations[0];
             for (int i=0; i<allySpawnLocations.length; i++) {
@@ -376,11 +347,12 @@ public strictfp class RobotPlayer {
             Direction bestDirection = Direction.CENTER;
             double bestHeuristic = -100000;
 
+            // Choose the direction which has the highest value according to a heuristic
             for (Direction direction : Direction.values()) {
                 MapLocation directionPlacement = rc.getLocation().add(direction);
-                double heuristic = 5 * Utils.getSumRobotDistance(directionPlacement, nearbyEnemies)  +
-                                -20 * Math.sqrt(directionPlacement.distanceSquaredTo(Utils.getNearestRobot(directionPlacement, nearbyEnemies))) +
-                                3 * Utils.getSumRobotDistance(directionPlacement, nearbyAllies);
+                double heuristic = HoneyConstants.MICRO_HEURISTIC_SUM_ENEMY_PRIORITY * Utils.getSumRobotDistance(directionPlacement, nearbyEnemies)  +
+                                HoneyConstants.MICRO_HEURISTIC_NEAREST_ENEMY_PRIORITY * Math.sqrt(directionPlacement.distanceSquaredTo(Utils.getNearestRobot(directionPlacement, nearbyEnemies))) +
+                                HoneyConstants.MICRO_HEURISTIC_SUM_ALLY_PRIORITY * Utils.getSumRobotDistance(directionPlacement, nearbyAllies);
 
                 if (heuristic > bestHeuristic) {
                     bestHeuristic = heuristic;
@@ -401,8 +373,10 @@ public strictfp class RobotPlayer {
     }
 
     public static RobotInfo attemptToHeal(RobotController rc) throws GameActionException {
-        RobotInfo[] allies = rc.senseNearbyRobots(rc.getLocation(), 4, ourTeam);
+        RobotInfo[] allies = rc.senseNearbyRobots(rc.getLocation(), 4, rc.getTeam());
         for (RobotInfo ally : allies) {
+            // Heal the first ally we see that wouldn't waste healing
+            // We should probably prioritize non-healer ducks here, but that's a future problem
             if (ally.health < (1000 - rc.getHealAmount()) && rc.canHeal(ally.getLocation())) {
                 rc.heal(ally.getLocation());
                 return ally;
@@ -417,6 +391,7 @@ public strictfp class RobotPlayer {
             if (flagInfo.getTeam().equals(enemyTeam) && rc.canPickupFlag(flagInfo.getLocation())) {
                 rc.pickupFlag(flagInfo.getLocation());
 
+                // We picked up a flag, now relay that to everyone else
                 for (FlagStatus flagStatus : flags) {
                     if (flagStatus.fetchId(rc) == flagInfo.getID()) {
                         flagStatus.pickup(rc, flagInfo);
@@ -450,7 +425,7 @@ public strictfp class RobotPlayer {
                     break;
                 }
 
-                // Prio flag carriers
+                // Prioritize flag carriers
                 if (enemies[i].hasFlag()) {
                     bestEnemy = enemies[i];
                     break;
