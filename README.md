@@ -38,7 +38,18 @@ To make sure all agents act together, we elect one agent (the first in turn orde
 
 ## Version History
 
+### Version 13
+
+Switch stun traps back to explosive traps.
+
+### Version 12
+
+Switch commanded flag every 700 rounds to prevent getting stuck in a forever stalemate. This could end up making things worse if we were in a winning position, but it's more fun to watch the ducks do things than just stalemate forever.
+
+Switch explosive traps to stun traps.
+
 ### Version 11
+
 Minor heuristic optimization
 
 ### Version 10

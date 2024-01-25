@@ -8,9 +8,9 @@ public class HoneyConstants {
 
     public static final int HEALER_EVERY_NTH_DUCK = 7; // Every Nth duck will prioritize healing
     public static final int MIN_CRUMBS_FOR_SPAWN_TRAPS = 190;
-    public static final int MIN_CRUMBS_FOR_COMBAT_TRAP = 200;
+    public static final int MIN_CRUMBS_FOR_COMBAT_TRAP = 290;
     public static final int MIN_ATTACKS_BETWEEN_COMBAT_TRAPS = 10;
-    public static final TrapType COMBAT_TRAP_TYPE = TrapType.STUN;
+    public static final TrapType COMBAT_TRAP_TYPE = TrapType.EXPLOSIVE;
     public static final int EARLY_GAME_STRAT_ROUNDS = 50;
     public static final double MICRO_HEURISTIC_SUM_ENEMY_PRIORITY = 5.0;
     public static final double MICRO_HEURISTIC_NEAREST_ENEMY_PRIORITY = -20.0;
